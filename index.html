@@ -1,0 +1,1235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI Plant Doctor · Ankush Sharma</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  :root{
+    --forest-900:#1d3a24; --forest-800:#245c2e; --green-600:#2e7d32; --green-500:#43a047;
+    --mustard:#e8a317; --mustard-soft:#fdf3d7;
+    --paper:#f6f1e3; --paper2:#efe8d2; --white:#fffdf6; --ink:#22281f; --muted:#66705f;
+    --border:#d8d0b8; --shadow:0 6px 18px rgba(29,58,36,.08);
+  }
+  html{ scroll-behavior:smooth; }
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background-color:var(--paper);
+    background-image:radial-gradient(rgba(29,58,36,.07) 1px, transparent 1px);
+    background-size:22px 22px;
+    color:var(--ink); min-height:100vh; padding:14px; display:flex; justify-content:center; line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  body.text-big{ font-size:18px; } body.text-small{ font-size:14.5px; }
+  .app{ width:100%; max-width:540px; display:flex; flex-direction:column; gap:14px; padding-bottom:36px; }
+  /* entrance + scroll reveal - slow, human, not flashy */
+  .reveal{ opacity:0; transform:translateY(14px); transition:opacity .55s ease, transform .55s ease; }
+  .reveal.in{ opacity:1; transform:none; }
+  .reveal:nth-child(2){ transition-delay:.05s; } .reveal:nth-child(3){ transition-delay:.1s; }
+  /* top thin progress while analysing */
+  .topbar{ position:fixed; top:0; left:0; height:3px; background:var(--green-600); width:0; z-index:2000; transition:width .4s ease; }
+  .topbar.on{ width:82%; }
+  .lang-row{ display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
+  .lang-selector{ display:flex; gap:6px; }
+  .lang-btn{ background:var(--white); border:1px solid var(--border); padding:6px 13px; border-radius:999px; font-size:.8rem; font-weight:700; color:var(--muted); cursor:pointer; transition:all .2s; }
+  .lang-btn.active{ background:var(--forest-800); color:#fff; border-color:var(--forest-800); }
+  .size-btns{ display:flex; gap:4px; }
+  .size-btns button{ background:var(--white); border:1px solid var(--border); border-radius:8px; padding:5px 9px; cursor:pointer; font-weight:700; color:var(--forest-800); }
+  .header{ text-align:center; padding:10px 6px 4px; position:relative; overflow:hidden; }
+  .leaf-drift{ position:absolute; font-size:20px; opacity:.35; animation:drift 9s ease-in-out infinite; pointer-events:none; }
+  .leaf-drift.l1{ left:6%; top:4px; } .leaf-drift.l2{ right:8%; top:22px; animation-delay:3s; font-size:16px; }
+  @keyframes drift{ 0%,100%{ transform:translateY(0) rotate(-6deg);} 50%{ transform:translateY(10px) rotate(10deg);} }
+  .credit-badge{ display:inline-block; background:var(--mustard-soft); border:1px dashed #c98f0a; color:#7a5a00; border-radius:999px; padding:7px 16px; font-size:13px; font-weight:700; margin-bottom:12px; }
+  .header h1{ font-family:Georgia,"Times New Roman",serif; font-size:2rem; font-weight:700; color:var(--forest-900); letter-spacing:-.02em; display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:6px; }
+  .header h1 .leaf{ display:inline-block; animation:sway 4s ease-in-out infinite; transform-origin:bottom center; }
+  @keyframes sway{ 0%,100%{ transform:rotate(-3deg);} 50%{ transform:rotate(4deg);} }
+  .header p.sub{ color:var(--muted); font-size:.92rem; max-width:42ch; margin:0 auto; }
+  .powered-badge{ display:inline-block; background:var(--white); border:1px solid var(--border); color:var(--muted); border-radius:999px; padding:4px 12px; font-size:11px; font-weight:600; margin-top:10px; }
+  .card{ background:var(--white); border-radius:16px; padding:20px; border:1px solid var(--border); box-shadow:var(--shadow); transition:transform .2s ease, box-shadow .2s ease; }
+  .card:hover{ transform:translateY(-1px); }
+  .card h2{ font-family:Georgia,serif; font-size:1.15rem; color:var(--forest-900); margin-bottom:4px; }
+  .card .hint{ font-size:.85rem; color:var(--muted); margin-bottom:12px; }
+  /* steps */
+  .steps{ display:flex; align-items:center; gap:6px; }
+  .step{ flex:1; text-align:center; font-size:.75rem; font-weight:700; color:var(--muted); padding:8px 4px; border:1px solid var(--border); border-radius:10px; background:#faf7ec; transition:all .3s; }
+  .step.active{ background:var(--forest-800); color:#fff; border-color:var(--forest-800); transform:scale(1.03); }
+  .step.done{ background:#e8f5e9; color:var(--forest-800); border-color:#a5d6a7; }
+  .step-arrow{ color:#b0a98a; font-weight:700; }
+  /* carousel - JS controlled, swipeable */
+  .carousel-card{ position:relative; overflow:hidden; }
+  .carousel-label{ font-size:.72rem; font-weight:800; text-transform:uppercase; color:var(--green-600); letter-spacing:.06em; margin-bottom:8px; }
+  .slider-viewport{ position:relative; min-height:52px; overflow:hidden; }
+  .slide{ position:absolute; inset:0; font-size:.92rem; line-height:1.45; opacity:0; transform:translateX(18px); transition:opacity .45s ease, transform .45s ease; pointer-events:none; }
+  .slide.on{ opacity:1; transform:none; position:relative; pointer-events:auto; }
+  .slider-controls{ display:flex; justify-content:space-between; align-items:center; margin-top:12px; }
+  .slider-dots{ display:flex; gap:6px; }
+  .slider-dots button{ width:8px; height:8px; border-radius:999px; background:#cbd5c0; border:none; cursor:pointer; padding:0; transition:all .3s; }
+  .slider-dots button.on{ width:22px; background:var(--green-600); }
+  .mini-btn{ background:var(--white); border:1px solid var(--border); border-radius:999px; padding:6px 12px; cursor:pointer; font-weight:700; color:var(--forest-800); font-size:.8rem; }
+  .mini-btn:active{ transform:scale(.96); }
+  /* accordion */
+  details.acc{ border:1px solid var(--border); border-radius:12px; padding:12px 14px; background:#faf7ec; margin-bottom:8px; }
+  details.acc summary{ cursor:pointer; font-weight:700; color:var(--forest-800); list-style:none; }
+  details.acc summary::-webkit-details-marker{ display:none; }
+  details.acc summary::after{ content:" +"; float:right; color:var(--green-600); }
+  details.acc[open] summary::after{ content:" −"; }
+  details.acc p, details.acc li{ font-size:.9rem; color:var(--ink); margin-top:8px; }
+  details.acc ul{ padding-left:18px; }
+  /* key */
+  .key-card{ display:flex; flex-direction:column; gap:10px; }
+  .key-header{ display:flex; justify-content:space-between; align-items:center; cursor:pointer; }
+  .key-title{ font-weight:800; color:var(--forest-800); display:flex; gap:8px; align-items:center; }
+  .key-status{ font-size:.75rem; font-weight:700; color:var(--green-600); background:#e8f5e9; padding:4px 10px; border-radius:999px; display:none; }
+  .key-body{ display:flex; flex-direction:column; gap:8px; overflow:hidden; transition:max-height .3s ease, opacity .3s ease; }
+  .key-body.collapsed{ max-height:0; opacity:0; }
+  .input-container{ position:relative; display:flex; align-items:center; }
+  .input-container input{ width:100%; padding:12px 44px 12px 14px; font-size:.9rem; border:1px solid #c9c2a6; border-radius:12px; background:#fff; font-family:inherit; }
+  .input-container input:focus{ outline:none; border-color:var(--green-500); box-shadow:0 0 0 3px rgba(67,160,71,.18); }
+  .toggle-icon{ position:absolute; right:10px; background:none; border:none; cursor:pointer; color:#888; display:flex; }
+  .toggle-icon svg{ width:20px; height:20px; }
+  .key-hint{ font-size:.76rem; color:var(--muted); } .key-hint a{ color:var(--green-600); font-weight:700; text-decoration:none; }
+  /* camera */
+  .cam-wrapper{ display:flex; flex-direction:column; gap:14px; }
+  .cam-empty{ display:flex; flex-direction:column; align-items:center; gap:12px; background:#f1f8e9; border:2px dashed #a5d6a7; border-radius:14px; padding:34px 18px; text-align:center; color:var(--forest-800); cursor:pointer; transition:all .2s; }
+  .cam-empty.drag{ background:#dcedc8; border-color:var(--green-600); transform:scale(1.01); }
+  .cam-empty p{ font-weight:600; font-size:.92rem; } .cam-empty small{ color:var(--muted); font-weight:400; }
+  .cam-active-wrap{ display:none; position:relative; width:100%; aspect-ratio:1/1; background:#111; border-radius:14px; overflow:hidden; }
+  .cam-active-wrap.visible{ display:block; animation:zoomIn .35s ease; }
+  @keyframes zoomIn{ from{ opacity:0; transform:scale(.97);} to{ opacity:1; transform:scale(1);} }
+  #cameraVideo{ width:100%; height:100%; object-fit:cover; display:block; }
+  #previewImg{ width:100%; height:100%; object-fit:contain; }
+  .reticle{ position:absolute; inset:15%; pointer-events:none; }
+  .reticle::before,.reticle::after,.reticle span::before,.reticle span::after{ content:''; position:absolute; width:26px; height:26px; border-color:var(--green-500); border-style:solid; border-width:0; }
+  .reticle::before{ top:0; left:0; border-top-width:3px; border-left-width:3px; border-top-left-radius:8px; }
+  .reticle::after{ top:0; right:0; border-top-width:3px; border-right-width:3px; border-top-right-radius:8px; }
+  .reticle span::before{ bottom:0; left:0; border-bottom-width:3px; border-left-width:3px; border-bottom-left-radius:8px; }
+  .reticle span::after{ bottom:0; right:0; border-bottom-width:3px; border-right-width:3px; border-bottom-right-radius:8px; }
+  .reticle.pulse{ animation:retPulse 1.6s ease-in-out infinite; }
+  @keyframes retPulse{ 0%,100%{ opacity:1;} 50%{ opacity:.55;} }
+  .scan-laser{ position:absolute; left:0; right:0; height:4px; background:rgba(67,160,71,.85); box-shadow:0 0 14px 3px rgba(67,160,71,.55); display:none; z-index:10; }
+  .scan-laser.active{ display:block; animation:laserScan 2s linear infinite; }
+  @keyframes laserScan{ 0%{ top:0; opacity:.5;} 10%,90%{ opacity:1;} 100%{ top:100%; opacity:.5;} }
+  .actions{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .actions3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+  .btn{ display:flex; align-items:center; justify-content:center; gap:7px; padding:13px 12px; border-radius:12px; font-weight:700; font-size:.92rem; cursor:pointer; border:none; font-family:inherit; transition:transform .15s, box-shadow .2s; position:relative; overflow:hidden; }
+  .btn:active{ transform:scale(.97); }
+  .btn-primary{ background:var(--forest-800); color:#fff; box-shadow:0 4px 12px rgba(29,58,36,.25); }
+  .btn-primary:disabled{ background:#9ca3af; box-shadow:none; cursor:not-allowed; }
+  .btn-secondary{ background:#fff; color:var(--forest-800); border:1px solid var(--border); }
+  .btn-mustard{ background:var(--mustard); color:#3d2f00; }
+  .btn svg{ width:18px; height:18px; }
+  .status{ display:none; align-items:center; gap:10px; padding:12px; background:#e8f5e9; border:1px solid #c8e6c9; border-radius:12px; color:var(--forest-800); font-weight:700; font-size:.85rem; }
+  .status.visible{ display:flex; }
+  .spinner{ width:16px; height:16px; min-width:16px; border:3px solid #c8e6c9; border-top-color:var(--green-600); border-radius:50%; animation:spin .8s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg);} }
+  .alert{ display:none; padding:12px 14px; border-radius:12px; font-size:.85rem; font-weight:500; }
+  .alert.visible{ display:block; animation:fadeUp .3s ease; }
+  @keyframes fadeUp{ from{ opacity:0; transform:translateY(6px);} to{ opacity:1; transform:none;} }
+  .alert.error{ background:#fdecea; color:#8b1a1a; border:1px solid #f5c6c6; }
+  .alert.warn{ background:var(--mustard-soft); color:#7a5a00; border:1px solid #f0d98a; }
+  .alert.ok{ background:#e8f5e9; color:var(--forest-800); border:1px solid #c8e6c9; }
+  .results{ display:none; } .results.visible{ display:block; }
+  .results.visible .result-item{ animation:fadeUp .45s ease both; }
+  .results.visible .result-item:nth-child(2){ animation-delay:.08s; } .results.visible .result-item:nth-child(3){ animation-delay:.16s; }
+  .results.visible .result-item:nth-child(4){ animation-delay:.24s; } .results.visible .result-item:nth-child(5){ animation-delay:.32s; }
+  .plant-header{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:14px; padding-bottom:14px; border-bottom:1px dashed var(--border); }
+  .plant-name{ font-family:Georgia,serif; font-size:1.35rem; font-weight:700; color:var(--forest-900); }
+  .badge{ padding:4px 12px; border-radius:999px; font-size:.72rem; font-weight:800; text-transform:uppercase; }
+  .badge.healthy{ background:#dcfce7; color:#166534; } .badge.diseased{ background:#fee2e2; color:#991b1b; } .badge.unknown{ background:#eee; color:#374151; }
+  .result-item{ margin-bottom:14px; } .result-item:last-child{ margin-bottom:0; }
+  .res-label{ font-size:.72rem; font-weight:800; color:var(--green-600); text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px; }
+  .res-value{ font-size:.95rem; line-height:1.55; } .res-value ul{ padding-left:18px; margin-top:4px; } .res-value li{ margin-bottom:4px; }
+  .res-box{ background:#faf7ec; padding:13px; border-radius:12px; margin-top:6px; border:1px solid var(--border); }
+  .res-time{ font-size:.78rem; color:var(--muted); margin-bottom:10px; }
+  .hist-item{ display:flex; gap:10px; align-items:center; border:1px solid var(--border); border-radius:12px; padding:10px; background:#faf7ec; margin-bottom:8px; cursor:pointer; }
+  .hist-item img{ width:52px; height:52px; object-fit:cover; border-radius:8px; background:#ddd; }
+  .hist-item b{ font-size:.88rem; display:block; } .hist-item small{ color:var(--muted); }
+  .hist-del{ margin-left:auto; background:none; border:none; font-size:1.1rem; cursor:pointer; color:#999; padding:6px; }
+  .check-row{ display:flex; gap:10px; align-items:flex-start; padding:9px 0; border-bottom:1px dashed var(--border); font-size:.9rem; }
+  .check-row:last-child{ border-bottom:none; } .check-row input{ margin-top:4px; accent-color:var(--green-600); width:18px; height:18px; }
+  .check-row.done span{ text-decoration:line-through; color:var(--muted); }
+  .footer{ text-align:center; font-size:.76rem; color:#8a8a7a; line-height:1.6; }
+  .footer a, .footer button.link{ color:var(--green-600); font-weight:700; text-decoration:none; background:none; border:none; cursor:pointer; font-size:.76rem; }
+  .toast{ position:fixed; left:50%; bottom:22px; transform:translateX(-50%) translateY(20px); background:var(--forest-900); color:#fff; padding:11px 18px; border-radius:999px; font-size:.85rem; font-weight:700; opacity:0; pointer-events:none; transition:all .3s; z-index:3000; box-shadow:0 8px 24px rgba(0,0,0,.25); max-width:92vw; text-align:center; }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  .modal-overlay{ position:fixed; inset:0; background:rgba(20,30,20,.55); display:flex; justify-content:center; align-items:center; z-index:1000; padding:16px; }
+  .modal-content{ background:var(--white); border-radius:18px; width:100%; max-width:480px; max-height:90vh; display:flex; flex-direction:column; box-shadow:0 20px 40px rgba(0,0,0,.25); animation:popIn .3s ease; border:1px solid var(--border); }
+  @keyframes popIn{ from{ transform:scale(.96); opacity:0;} to{ transform:scale(1); opacity:1;} }
+  .modal-header{ padding:18px 20px; border-bottom:1px dashed var(--border); display:flex; justify-content:space-between; align-items:center; }
+  .modal-header h2{ font-family:Georgia,serif; font-size:1.1rem; color:var(--forest-800); }
+  .modal-close{ background:none; border:none; font-size:1.6rem; color:#999; cursor:pointer; }
+  .modal-body{ padding:18px 20px; overflow-y:auto; font-size:.9rem; line-height:1.6; } .modal-body p{ margin-bottom:12px; }
+  .modal-footer{ padding:16px 20px; border-top:1px dashed var(--border); display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .modal-btn{ background:var(--forest-800); color:#fff; border:none; padding:10px 22px; border-radius:999px; font-weight:700; cursor:pointer; }
+  .hidden{ display:none !important; }
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{ animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
+    html{ scroll-behavior:auto; } .reveal{ opacity:1; transform:none; }
+  }
+
+  /* --- extra animations (subtle, human) --- */
+  .sun{ position:absolute; right:10px; top:6px; font-size:22px; animation:sunSpin 26s linear infinite; opacity:.8; }
+  @keyframes sunSpin{ to{ transform:rotate(360deg);} }
+  .falling{ position:fixed; inset:0; pointer-events:none; z-index:1; overflow:hidden; }
+  .falling span{ position:absolute; top:-40px; font-size:20px; opacity:.22; animation:leafFall 19s linear infinite; }
+  .falling span:nth-child(1){ left:8%; animation-delay:0s; } .falling span:nth-child(2){ left:86%; animation-delay:7s; font-size:16px; } .falling span:nth-child(3){ left:48%; animation-delay:13s; font-size:14px; }
+  @keyframes leafFall{ 0%{ transform:translateY(0) rotate(0deg);} 100%{ transform:translateY(110vh) rotate(320deg);} }
+  .cam-empty{ animation:breathe 3.2s ease-in-out infinite; }
+  @keyframes breathe{ 0%,100%{ box-shadow:0 0 0 0 rgba(67,160,71,.0);} 50%{ box-shadow:0 0 0 6px rgba(67,160,71,.08);} }
+  .grow-leaf{ display:inline-block; animation:growLeaf 1.4s ease-in-out infinite; transform-origin:bottom center; }
+  @keyframes growLeaf{ 0%,100%{ transform:scale(.9) rotate(-4deg);} 50%{ transform:scale(1.15) rotate(4deg);} }
+  .drop{ display:inline-block; animation:dropFall 2.2s ease-in-out infinite; }
+  @keyframes dropFall{ 0%{ transform:translateY(-2px); opacity:.6;} 50%{ transform:translateY(6px); opacity:1;} 100%{ transform:translateY(-2px); opacity:.6;} }
+  .success-check{ width:44px; height:44px; border-radius:50%; background:#e8f5e9; color:var(--green-600); display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:800; margin-bottom:10px; animation:checkPop .5s ease; }
+  @keyframes checkPop{ 0%{ transform:scale(.4); opacity:0;} 70%{ transform:scale(1.12);} 100%{ transform:scale(1); opacity:1;} }
+  .step.active{ animation:stepPulse 2s ease-in-out infinite; }
+  @keyframes stepPulse{ 0%,100%{ box-shadow:0 0 0 0 rgba(36,92,46,.0);} 50%{ box-shadow:0 0 0 5px rgba(36,92,46,.12);} }
+  .hist-item img{ transition:transform .25s; } .hist-item:hover img{ transform:scale(1.08); }
+  .ripple{ position:absolute; border-radius:50%; background:rgba(255,255,255,.55); transform:scale(0); animation:rippleAnim .55s ease-out forwards; pointer-events:none; }
+  @keyframes rippleAnim{ to{ transform:scale(4); opacity:0;} }
+  .shake{ animation:shakeAnim .4s ease; } @keyframes shakeAnim{ 0%,100%{ transform:translateX(0);} 25%{ transform:translateX(-5px);} 75%{ transform:translateX(5px);} }
+  .quiz-opt{ display:block; width:100%; text-align:left; background:#faf7ec; border:1px solid var(--border); border-radius:12px; padding:11px 13px; margin-bottom:8px; cursor:pointer; font-size:.92rem; font-family:inherit; transition:all .2s; }
+  .quiz-opt:hover{ background:#e8f5e9; } .quiz-opt.correct{ background:#dcfce7; border-color:#16a34a; } .quiz-opt.wrong{ background:#fee2e2; border-color:#dc2626; }
+  body.high-contrast{ background:#fff; color:#000; } body.high-contrast .card{ background:#fff; border-color:#000; box-shadow:none; } body.high-contrast .btn-primary{ background:#000; }
+  .lightbox{ position:fixed; inset:0; background:rgba(0,0,0,.88); display:none; align-items:center; justify-content:center; z-index:4000; padding:16px; }
+  .lightbox.open{ display:flex; } .lightbox img{ max-width:100%; max-height:90vh; border-radius:12px; animation:zoomIn .3s ease; }
+  .filter-btn{ padding:6px 11px; border-radius:999px; border:1px solid var(--border); background:#fff; cursor:pointer; font-weight:700; font-size:.8rem; color:var(--forest-800); }
+  .filter-btn.on{ background:var(--forest-800); color:#fff; }
+  .due-badge{ background:#fee2e2; color:#991b1b; font-size:.72rem; font-weight:800; padding:2px 8px; border-radius:999px; margin-left:6px; }
+
+  @media print{
+    body{ background:#fff; } .lang-row,.steps,.key-card,.cam-wrapper,.toast,.topbar,.no-print{ display:none !important; }
+    .card{ box-shadow:none; border:1px solid #ccc; } .results{ display:block !important; }
+  }
+</style>
+</head>
+<body>
+<div class="topbar" id="topBar"></div>
+<div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="welcomeModal">
+  <div class="modal-content">
+    <div class="modal-header"><h2 data-i18n="modalTitle">PLANT DISEASE GENERALIST</h2><button class="modal-close" onclick="closeWelcome()">×</button></div>
+    <div class="modal-body">
+      <p data-i18n="modalWelcome">Welcome to my science project! Thank you all for giving me this chance to present my work to you.</p>
+      <p>
+        <b data-i18n="modalStudent">Student:</b> Ankush Sharma<br>
+        <b data-i18n="modalSchool">School:</b> GBSSS Tukmirpur, Delhi 110094<br>
+        <b data-i18n="modalId">Student ID:</b> 20260174844<br>
+        <b data-i18n="modalRoll">Roll No:</b> 47
+      </p>
+      <p>
+        <b data-i18n="modalStudent">Student:</b> Mohit<br>
+        <b data-i18n="modalSchool">School:</b> GBSSS Tukmirpur, Delhi 110094<br>
+        <b data-i18n="modalId">Student ID:</b> 20210334312<br>
+        <b data-i18n="modalRoll">Roll No:</b> 22
+      </p>
+      <p><b data-i18n="modalAboutTitle">About the Project:</b><br><span data-i18n="modalAboutText">This web app helps farmers detect plant diseases early by simply taking a photo of a leaf. It uses an AI tool to analyze the image and suggests organic &amp; chemical cures.</span></p>
+      <p><b data-i18n="modalFeedbackTitle">Feedback:</b><br><span data-i18n="modalFeedbackText">Please share your thoughts about this website and give advice on how I can make it even better.</span></p>
+      <p style="text-align:center; margin-top:12px; font-size:.85rem;">📧 <b data-i18n="modalContact">Contact:</b> <a href="mailto:sharma.ankush20230@gmail.com" style="color:var(--green-600); font-weight:700; text-decoration:none;">sharma.ankush20230@gmail.com</a></p>
+    </div>
+    <div class="modal-footer">
+      <label style="font-size:.82rem; display:flex; gap:6px; align-items:center;"><input type="checkbox" id="dontShowAgain"> <span data-i18n="dontShow">Do not show again</span></label>
+      <button class="modal-btn" data-i18n="modalBtn" onclick="closeWelcome()" style="margin-left:auto;">Close &amp; Enter</button>
+    </div>
+  </div>
+</div>
+
+<main class="app">
+  <div class="lang-row reveal">
+    <div class="lang-selector">
+      <button class="lang-btn active" onclick="changeLanguage('en',this)">English</button>
+      <button class="lang-btn" onclick="changeLanguage('hi',this)">हिंदी</button>
+      <button class="lang-btn" onclick="changeLanguage('ta',this)">தமிழ்</button>
+    </div>
+    <div class="size-btns"><button onclick="changeTextSize(-1)" aria-label="Smaller text">A−</button><button onclick="changeTextSize(1)" aria-label="Larger text">A+</button></div>
+  </div>
+
+  <header class="header reveal">
+    <span class="leaf-drift l1">🍃</span><span class="leaf-drift l2">🌿</span><span class="sun">☀️</span>
+    <div class="credit-badge" data-i18n="credit">Created by Ankush Sharma &amp; Mohit · XI-A · GBSSS Tukmirpur</div>
+    <h1><span class="leaf">🌱</span><span data-i18n="title">AI Plant Doctor</span></h1>
+    <p class="sub" data-i18n="subtitle">Take a photo of a leaf, identify the disease, and know the right treatment — in simple language.</p>
+    <br><span class="powered-badge" data-i18n="powered">Powered by AI tool</span>
+  </header>
+
+  <section class="card reveal" aria-label="Steps">
+    <div class="steps">
+      <div class="step active" id="step1">1 · <span data-i18n="stepPhoto">Take photo</span></div><span class="step-arrow">›</span>
+      <div class="step" id="step2">2 · <span data-i18n="stepCheck">Check</span></div><span class="step-arrow">›</span>
+      <div class="step" id="step3">3 · <span data-i18n="stepTreat">Treatment</span></div>
+    </div>
+  </section>
+
+  <section class="card carousel-card reveal">
+    <div class="carousel-label" data-i18n="aboutTitle">About This Software</div>
+    <div class="slider-viewport" id="sliderViewport">
+      <div class="slide on" data-i18n="slide1">🌾 AI Plant Doctor is created to help farmers protect crops from disease before it spreads.</div>
+      <div class="slide" data-i18n="slide2">📷 Just snap a photo of a leaf — live camera or gallery — and get an instant diagnosis.</div>
+      <div class="slide" data-i18n="slide3">🔬 Powered by advanced AI to identify plant species and detect diseases early.</div>
+      <div class="slide" data-i18n="slide4">🌱 Suggests safe organic remedies and, when needed, chemical treatments.</div>
+      <div class="slide" data-i18n="slide5">⚡ No login, no setup, no cost — results in seconds, in simple farmer-friendly language.</div>
+    </div>
+    <div class="slider-controls">
+      <div class="slider-dots" id="sliderDots"></div>
+      <div style="display:flex; gap:6px;"><button class="mini-btn" onclick="moveSlide(-1)">‹ <span data-i18n="prev">Prev</span></button><button class="mini-btn" onclick="moveSlide(1)"><span data-i18n="next">Next</span> ›</button></div>
+    </div>
+    <p class="hint" style="margin:8px 0 0; font-size:.78rem;" data-i18n="swipeHint">You can also swipe — tap a dot to jump.</p>
+  </section>
+
+  <section class="card reveal">
+    <h2 data-i18n="photoTipsTitle">📸 How to take a good photo?</h2>
+    <p class="hint" data-i18n="photoTipsHint">A good photo means a good check. Keep these 4 things in mind:</p>
+    <details class="acc" open><summary data-i18n="tip1Title">1. One leaf, close up</summary><p data-i18n="tip1Text">Do not take the whole plant. Keep one diseased leaf in the centre of the frame, so spots are clearly visible.</p></details>
+    <details class="acc"><summary data-i18n="tip2Title">2. Take it in good light</summary><p data-i18n="tip2Text">Take it in daylight. Spots hide in dark or shadowy photos.</p></details>
+    <details class="acc"><summary data-i18n="tip3Title">3. Straight, without shaking</summary><p data-i18n="tip3Text">Keep the phone steady. A blurry photo can give a wrong result.</p></details>
+    <details class="acc"><summary data-i18n="tip4Title">4. Check both sides</summary><p data-i18n="tip4Text">If there are spots on the underside too, check that side in a separate photo.</p></details>
+  </section>
+
+  <section class="card key-card reveal">
+    <div class="key-header" id="keyHeader">
+      <div class="key-title">🔑 <span data-i18n="apiKeyTitle">API Key</span></div>
+      <div class="key-status" id="keyStatus" data-i18n="apiKeyStatus">✓ Configured</div>
+    </div>
+    <div class="key-body" id="keyBody">
+      <div class="input-container">
+        <input type="password" id="apiKeyInput" placeholder="Paste your API key here..." autocomplete="off" />
+        <button type="button" class="toggle-icon" id="toggleKeyBtn" aria-label="Toggle key visibility">👁️</button>
+      </div>
+      <div class="key-hint" data-i18n="apiKeyHint">Get a free key at aistudio.google.com/apikey. Saved locally on your device.</div>
+      <div style="display:flex; gap:8px;"><button class="mini-btn" onclick="saveKeyManually()" data-i18n="saveKey">Save Key</button><button class="mini-btn" onclick="clearKey()" data-i18n="clearKey">Clear Key</button></div>
+      <p style="font-size:.78rem; color:var(--muted);" data-i18n="keyPrivacy">The key is saved only on this phone/browser — this website does not send it anywhere else.</p>
+    </div>
+  </section>
+
+  <section class="card cam-wrapper reveal">
+    <div class="cam-empty" id="camEmpty" onclick="document.getElementById('galleryInput').click()">
+      <span style="font-size:42px;">📷</span>
+      <p data-i18n="camEmpty">Ready to analyze a leaf</p>
+      <small data-i18n="camEmptySub">Camera will open, or tap here to pick a photo from gallery. You can also drag a photo here.</small>
+    </div>
+    <div class="cam-active-wrap" id="camActive">
+      <video id="cameraVideo" autoplay playsinline muted></video>
+      <div class="reticle pulse"><span></span></div>
+      <div class="scan-laser" id="scanLaser"></div>
+    </div>
+    <div class="cam-active-wrap" id="previewWrap" style="background:#111;">
+      <img id="previewImg" alt="Leaf preview" />
+      <div class="reticle"><span></span></div>
+      <div class="scan-laser" id="previewLaser"></div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-primary" id="captureBtn" disabled><span data-i18n="btnAnalyze">Analyze</span></button>
+      <button class="btn btn-secondary" id="uploadBtn"><span data-i18n="btnUpload">Upload</span></button>
+    </div>
+    <div class="actions3">
+      <button class="btn btn-secondary" id="switchCamBtn" style="font-size:.82rem; padding:10px 6px;" data-i18n="switchCam">🔄 Switch camera</button>
+      <button class="btn btn-secondary" id="retakeBtn" style="font-size:.82rem; padding:10px 6px;" data-i18n="retake">↩ Retake</button>
+      <button class="btn btn-secondary" id="removeBtn" style="font-size:.82rem; padding:10px 6px;" data-i18n="removePhoto">✕ Remove photo</button>
+    </div>
+    <input type="file" id="galleryInput" accept="image/*" style="display:none" />
+    <div class="status" id="statusBox"><span class="spinner"></span><span class="grow-leaf">🌱</span><span id="statusText" data-i18n="statusAnalyzing">Analyzing...</span></div>
+    <div class="alert" id="alertBox"><span id="alertText"></span></div>
+  </section>
+
+  <section class="card results reveal" id="resultsCard">
+    <div class="success-check hidden" id="successCheck">✓</div>
+    <div class="plant-header"><span class="plant-name" id="resPlantName">—</span><span class="badge unknown" id="resStatusBadge">—</span></div>
+    <div class="res-time" id="resTime"></div>
+    <div class="result-item"><div class="res-label" data-i18n="resDiseaseLabel">Disease / Pest</div><div class="res-value" id="resDisease">—</div></div>
+    <div class="result-item"><div class="res-label" data-i18n="resSymptomsLabel">Symptoms</div><div class="res-value" id="resSymptoms">—</div></div>
+    <div class="result-item"><div class="res-label" data-i18n="resOrganicLabel">🌱 Organic Treatment</div><div class="res-box"><div class="res-value" id="resOrganic">—</div></div></div>
+    <div class="result-item"><div class="res-label" style="color:#b45309;" data-i18n="resChemicalLabel">🧪 Chemical Treatment</div><div class="res-box"><div class="res-value" id="resChemical">—</div></div></div>
+    <div class="actions" style="margin-top:14px;">
+      <button class="btn btn-secondary" onclick="speakResult()">🔊 <span data-i18n="speak">Listen</span></button>
+      <button class="btn btn-secondary" onclick="copyTreatment()">📋 <span data-i18n="copyTreat">Copy treatment</span></button>
+      <button class="btn btn-secondary" onclick="shareResult()">↗ <span data-i18n="share">Share</span></button>
+      <button class="btn btn-mustard" onclick="window.print()">🖨️ <span data-i18n="print">Print report</span></button>
+    </div>
+    <div style="margin-top:12px;"><label style="font-size:.82rem; font-weight:700;" data-i18n="noteTitle">My note for this result</label><textarea id="resultNote" rows="2" style="width:100%; margin-top:6px; padding:10px; border:1px solid var(--border); border-radius:10px; font-family:inherit;" data-i18n-ph="notePh" placeholder="Write your own note here..."></textarea><button class="mini-btn" style="margin-top:6px;" onclick="saveResultNote()" data-i18n="noteSave">Save note</button></div>
+    <div style="display:flex; gap:8px; margin-top:10px;"><button class="mini-btn" onclick="exportTxt()" data-i18n="exportTxt">Download report (.txt)</button><button class="mini-btn" onclick="copyAllResult()" data-i18n="copyAll">Copy full result</button></div>
+    <p style="font-size:.78rem; color:var(--muted); margin-top:10px;" data-i18n="resultSavedNote">This result is also saved in history on your phone — see below.</p>
+  </section>
+
+  <section class="card reveal no-print">
+    <h2 data-i18n="historyTitle">🕘 Past Checks (History)</h2>
+    <p class="hint" data-i18n="historyHint">Saved only on this device. Tap an item to see an old result again.</p>
+    <input id="histSearch" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:10px; margin-bottom:8px; font-family:inherit;" data-i18n-ph="histSearchPh" placeholder="Search plant or disease...">
+    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;"><button class="filter-btn on" data-filter="all" onclick="setHistFilter('all',this)" data-i18n="histFilterAll">All</button><button class="filter-btn" data-filter="healthy" onclick="setHistFilter('healthy',this)" data-i18n="histFilterHealthy">Healthy only</button><button class="filter-btn" data-filter="diseased" onclick="setHistFilter('diseased',this)" data-i18n="histFilterDiseased">Diseased only</button><button class="filter-btn" data-filter="star" onclick="setHistFilter('star',this)" data-i18n="histFilterStar">Starred</button><select id="histSort" onchange="renderHistory()" style="padding:6px; border-radius:999px; border:1px solid var(--border); font-weight:700;"><option value="new" data-i18n="histSortNew">Newest first</option><option value="old" data-i18n="histSortOld">Oldest first</option><option value="plant" data-i18n="histSortPlant">By plant name</option></select></div>
+    <div id="historyList"></div>
+    <div id="compareBox" class="hidden" style="border:1px dashed var(--border); border-radius:12px; padding:12px; margin-top:10px; background:#faf7ec;"></div>
+    <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;"><button class="mini-btn" onclick="exportCsv()" data-i18n="exportCsv">Export history (.csv)</button><button class="mini-btn" onclick="clearCompare()" data-i18n="compareClear">Clear comparison</button></div>
+    <button class="mini-btn no-print" onclick="clearHistory()" data-i18n="clearHistory">Clear history</button>
+  </section>
+
+  <section class="card reveal no-print">
+    <h2 data-i18n="guideTitle">🌿 Common Problems — General Info</h2>
+    <p class="hint" data-i18n="guideHint">This is only general information, not a diagnosis of any photo. For doses, ask a local agriculture officer.</p>
+    <details class="acc"><summary data-i18n="g1Title">Black/brown spots on leaf (Leaf Spot)</summary><p data-i18n="g1Text">Round or irregular spots appear on the leaf and slowly grow. Remove the diseased leaf separately and keep the area around the plant clean.</p></details>
+    <details class="acc"><summary data-i18n="g2Title">White powder-like coating (Powdery Mildew)</summary><p data-i18n="g2Text">A white powder collects on the leaf. Improve air flow and do not crowd plants too close together.</p></details>
+    <details class="acc"><summary data-i18n="g3Title">Tiny insects stuck on leaf (Aphids)</summary><p data-i18n="g3Text">Tiny green/black insects stick to soft new leaves. A gentle stream of water can wash them off; if there are many, ask an expert.</p></details>
+    <details class="acc"><summary data-i18n="g4Title">Leaf turning yellow (Yellowing)</summary><p data-i18n="g4Text">Too much or too little water, lack of sunlight, or lack of nutrition can also turn leaves yellow — it is not always a disease.</p></details>
+    <details class="acc"><summary data-i18n="g5Title">Plant wilting (Wilting)</summary><p data-i18n="g5Text">If the soil is dry, water it. If it still wilts when the soil is wet, there may be a root problem — show it to an expert.</p></details>
+  </section>
+
+  <section class="card reveal no-print">
+    <h2 data-i18n="preventTitle">✅ Habits that prevent disease</h2>
+    <p class="hint" data-i18n="preventHint">Tick them — this is saved on your phone.</p>
+    <div id="preventList"></div>
+  </section>
+
+  <section class="card reveal no-print">
+    <h2 data-i18n="faqTitle">❓ Frequently Asked Questions</h2>
+    <details class="acc"><summary data-i18n="faq1Q">How long does a result take after taking a photo?</summary><p data-i18n="faq1A">Usually a few seconds, depending on internet speed. If the key is wrong or there is no net, you will see an error — no fake result is made.</p></details>
+    <details class="acc"><summary data-i18n="faq2Q">Is my photo or key uploaded anywhere?</summary><p data-i18n="faq2A">The key stays only in your browser. The photo is sent only to the AI service for checking, and history is saved only on your device.</p></details>
+    <details class="acc"><summary data-i18n="faq3Q">What if the result looks wrong?</summary><p data-i18n="faq3A">Take another photo in good light, close up. Before deciding for a large crop, always ask a local agriculture expert.</p></details>
+    <details class="acc"><summary data-i18n="faq4Q">Why is no chemical dose written?</summary><p data-i18n="faq4A">Dose depends on crop, age and area. A wrong dose can cause harm, so no dose guess is given here — follow the packet instructions or an expert's advice.</p></details>
+  </section>
+
+
+  <section class="card reveal no-print">
+    <h2 data-i18n="settingsTitle">⚙️ Settings</h2>
+    <p class="hint" data-i18n="settingsHint">These settings are saved only on this device.</p>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;"><button class="mini-btn" id="contrastBtn" onclick="toggleSetting('contrast')" data-i18n="contrastBtn">High contrast: Off</button><button class="mini-btn" id="soundBtn" onclick="toggleSetting('sound')" data-i18n="soundBtn">Result sound: Off</button><button class="mini-btn" id="vibrateBtn" onclick="toggleSetting('vibrate')" data-i18n="vibrateBtn">Vibration: Off</button></div>
+  </section>
+
+  <section class="card reveal no-print">
+    <h2 data-i18n="dailyTipTitle">💡 Tip of the Day</h2>
+    <p class="hint" data-i18n="dailyTipHint">A general tip — it changes every day, it is not a diagnosis.</p>
+    <p id="dailyTipText" style="font-size:.95rem;"></p>
+  </section>
+
+  <section class="card reveal no-print">
+    <h2><span class="drop">💧</span> <span data-i18n="waterTitle">Water Log</span></h2>
+    <p class="hint" data-i18n="waterHint">Tap when you water the plant. This is your own record, nothing is checked automatically.</p>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;"><button class="btn btn-secondary" onclick="logWater()" data-i18n="waterBtn">Watered today</button><span id="waterInfo" style="font-size:.88rem;"></span></div>
+  </section>
+
+  <section class="card reveal no-print">
+    <h2 data-i18n="diaryTitle">📓 My Plant Diary</h2>
+    <p class="hint" data-i18n="diaryHint">Write the plant name and what you noticed. Saved only on this device.</p>
+    <input id="diaryPlant" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:10px; margin-bottom:8px; font-family:inherit;" data-i18n-ph="diaryPlantPh" placeholder="Plant name">
+    <textarea id="diaryNote" rows="2" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:10px; font-family:inherit;" data-i18n-ph="diaryNotePh" placeholder="What did you notice?"></textarea>
+    <button class="mini-btn" style="margin-top:8px;" onclick="addDiary()" data-i18n="diaryAdd">Add to diary</button>
+    <div id="diaryList" style="margin-top:10px;"></div>
+  </section>
+
+  <section class="card reveal no-print">
+    <h2 data-i18n="remindTitle">⏰ Follow-up Reminder</h2>
+    <p class="hint" data-i18n="remindHint">Set a date to check the same plant again. A reminder is only a date on this device — it does not send a notification by itself.</p>
+    <input type="date" id="remindDate" style="padding:10px; border:1px solid var(--border); border-radius:10px; font-family:inherit;">
+    <input id="remindNote" style="padding:10px; border:1px solid var(--border); border-radius:10px; font-family:inherit; margin-left:6px;" data-i18n-ph="remindNotePh" placeholder="Which plant?">
+    <button class="mini-btn" style="margin-left:6px;" onclick="addReminder()" data-i18n="remindAdd">Set reminder</button>
+    <div id="remindList" style="margin-top:10px;"></div>
+  </section>
+
+  <section class="card reveal no-print">
+    <h2 data-i18n="guideTitle2">🌿 More Common Problems</h2>
+    <details class="acc"><summary data-i18n="g6Title">Roots rotting from too much water</summary><p data-i18n="g6Text">If the soil stays wet for days and the plant wilts, the pot may not drain well. Let the soil dry a little between waterings and check that water can drain out.</p></details>
+    <details class="acc"><summary data-i18n="g7Title">Scorched patches from strong sun</summary><p data-i18n="g7Text">Pale, dry patches on leaves that face harsh afternoon sun can be sunburn, not infection. Move a potted plant to lighter shade for a few days and watch it.</p></details>
+    <details class="acc"><summary data-i18n="g8Title">Mottled, crinkled leaves</summary><p data-i18n="g8Text">A mosaic-like pattern with crinkled growth can spread through tools and hands. Do not take cuttings from such a plant, clean tools, and ask an expert before replanting nearby.</p></details>
+  </section>
+
+  <section class="card reveal no-print">
+    <h2 data-i18n="quizTitle">🧠 Quick Quiz — For Students</h2>
+    <p class="hint" data-i18n="quizHint">5 questions. Your score is shown only on this screen and is not sent anywhere.</p>
+    <div id="quizBox"></div>
+  </section>
+
+  <section class="card reveal no-print">
+    <h2 data-i18n="glossTitle">📖 Simple Glossary</h2>
+    <p class="hint" data-i18n="glossHint">Words used in the result, in simple language.</p>
+    <div id="glossBox"></div>
+  </section>
+
+  <p class="footer"><span data-i18n="footer">Results are AI-generated. For critical crops, please consult a local expert.</span><br>Ankush Sharma &amp; Mohit · XI-A · GBSSS Tukmirpur, Delhi 110094 · <a href="mailto:sharma.ankush20230@gmail.com">sharma.ankush20230@gmail.com</a><br><button class="link" onclick="openWelcome()">Show welcome note again</button></p>
+</main>
+<div class="falling" aria-hidden="true"><span>🍃</span><span>🌿</span><span>🍃</span></div>
+<div class="lightbox" id="lightbox" onclick="this.classList.remove('open')"><img id="lightboxImg" alt=""></div>
+<script>
+(function () {
+  "use strict";
+  const translations = {
+    en: {
+      credit: "Created by Ankush Sharma & Mohit · XI-A · GBSSS Tukmirpur",
+      title: "AI Plant Doctor", powered: "Powered by AI tool",
+      subtitle: "Take a photo of a leaf, identify the disease, and know the right treatment — in simple language.",
+      aboutTitle: "About This Software",
+      slide1: "🌾 AI Plant Doctor is created to help farmers protect crops from disease before it spreads.",
+      slide2: "📷 Just snap a photo of a leaf — live camera or gallery — and get an instant diagnosis.",
+      slide3: "🔬 Powered by advanced AI to identify plant species and detect diseases early.",
+      slide4: "🌱 Suggests safe organic remedies and, when needed, chemical treatments.",
+      slide5: "⚡ No login, no setup, no cost — results in seconds, in simple farmer-friendly language.",
+      apiKeyTitle: "API Key", apiKeyStatus: "✓ Configured",
+      apiKeyHint: "Get a free key at aistudio.google.com/apikey. Saved locally on your device.",
+      camEmpty: "Ready to analyze a leaf", camEmptySub: "Camera will open, or tap here to pick a photo from gallery. You can also drag a photo here.",
+      btnAnalyze: "Analyze", btnUpload: "Upload", statusAnalyzing: "Consulting AI...",
+      resDiseaseLabel: "Disease / Pest", resSymptomsLabel: "Symptoms",
+      resOrganicLabel: "🌱 Organic Treatment", resChemicalLabel: "🧪 Chemical Treatment",
+      footer: "Results are AI-generated. For critical crops, please consult a local expert.",
+      modalTitle: "PLANT DISEASE GENERALIST",
+      modalWelcome: "Welcome to my science project! Thank you all for giving me this chance to present my work to you.",
+      modalStudent: "Student:", modalSchool: "School:", modalId: "Student ID:", modalRoll: "Roll No:",
+      modalAboutTitle: "About the Project:", modalAboutText: "This web app helps farmers detect plant diseases early by simply taking a photo of a leaf. It uses an AI tool to analyze the image and suggests organic & chemical cures.",
+      modalFeedbackTitle: "Feedback:", modalFeedbackText: "Please share your thoughts about this website and give advice on how I can make it even better.",
+      modalContact: "Contact:", modalBtn: "Close & Enter", dontShow: "Do not show again",
+      aiPromptLang: "English",
+      alertNoKey: "Please enter an API key first.", alertNoImage: "No image to analyze. Please capture or upload a photo.",
+      alertCamError: "Camera access denied or unavailable. Please upload an image instead.",
+      stepPhoto: "Take photo", stepCheck: "Check", stepTreat: "Treatment", prev: "Prev", next: "Next",
+      swipeHint: "You can also swipe — tap a dot to jump.",
+      photoTipsTitle: "📸 How to take a good photo?", photoTipsHint: "A good photo means a good check. Keep these 4 things in mind:",
+      tip1Title: "1. One leaf, close up", tip1Text: "Do not take the whole plant. Keep one diseased leaf in the centre of the frame, so spots are clearly visible.",
+      tip2Title: "2. Take it in good light", tip2Text: "Take it in daylight. Spots hide in dark or shadowy photos.",
+      tip3Title: "3. Straight, without shaking", tip3Text: "Keep the phone steady. A blurry photo can give a wrong result.",
+      tip4Title: "4. Check both sides", tip4Text: "If there are spots on the underside too, check that side in a separate photo.",
+      saveKey: "Save Key", clearKey: "Clear Key", keyPrivacy: "The key is saved only on this phone/browser — this website does not send it anywhere else.",
+      switchCam: "🔄 Switch camera", retake: "↩ Retake", removePhoto: "✕ Remove photo",
+      speak: "Listen", copyTreat: "Copy treatment", share: "Share", print: "Print report",
+      resultSavedNote: "This result is also saved in history on your phone — see below.",
+      historyTitle: "🕘 Past Checks (History)", historyHint: "Saved only on this device. Tap an item to see an old result again.",
+      clearHistory: "Clear history", emptyHistory: "No past check yet. Your first result will appear here.",
+      guideTitle: "🌿 Common Problems — General Info", guideHint: "This is only general information, not a diagnosis of any photo. For doses, ask a local agriculture officer.",
+      g1Title: "Black/brown spots on leaf (Leaf Spot)", g1Text: "Round or irregular spots appear on the leaf and slowly grow. Remove the diseased leaf separately and keep the area around the plant clean.",
+      g2Title: "White powder-like coating (Powdery Mildew)", g2Text: "A white powder collects on the leaf. Improve air flow and do not crowd plants too close together.",
+      g3Title: "Tiny insects stuck on leaf (Aphids)", g3Text: "Tiny green/black insects stick to soft new leaves. A gentle stream of water can wash them off; if there are many, ask an expert.",
+      g4Title: "Leaf turning yellow (Yellowing)", g4Text: "Too much or too little water, lack of sunlight, or lack of nutrition can also turn leaves yellow — it is not always a disease.",
+      g5Title: "Plant wilting (Wilting)", g5Text: "If the soil is dry, water it. If it still wilts when the soil is wet, there may be a root problem — show it to an expert.",
+      preventTitle: "✅ Habits that prevent disease", preventHint: "Tick them — this is saved on your phone.",
+      prevent1: "Remove diseased leaves quickly, away from healthy plants", prevent2: "Water in the morning, at the roots — not on the leaves in the evening",
+      prevent3: "Keep space between plants so air can pass", prevent4: "Clean tools after working on a sick plant", prevent5: "Do not plant the same crop in the same place every time",
+      faqTitle: "❓ Frequently Asked Questions",
+      faq1Q: "How long does a result take after taking a photo?", faq1A: "Usually a few seconds, depending on internet speed. If the key is wrong or there is no net, you will see an error — no fake result is made.",
+      faq2Q: "Is my photo or key uploaded anywhere?", faq2A: "The key stays only in your browser. The photo is sent only to the AI service for checking, and history is saved only on your device.",
+      faq3Q: "What if the result looks wrong?", faq3A: "Take another photo in good light, close up. Before deciding for a large crop, always ask a local agriculture expert.",
+      faq4Q: "Why is no chemical dose written?", faq4A: "Dose depends on crop, age and area. A wrong dose can cause harm, so no dose guess is given here — follow the packet instructions or an expert's advice.",
+      copied: "Treatment copied!", shared: "Opening share…", noShare: "Sharing is not supported on this browser — treatment copied instead.",
+      historyCleared: "History cleared.", keySaved: "Key saved on this device.", keyCleared: "Key removed.",
+      photoRemoved: "Photo removed.", darkPhoto: "This photo looks very dark. Try again in better light for a better result.",
+      offlineWarn: "You appear to be offline. Connect to the internet before analyzing.",
+      statusSteps: ["Consulting AI…", "Looking closely at the leaf…", "Checking spots and colour…", "Preparing treatment…"],
+      errInvalidKey: "API key looks invalid. Please check the key and save it again.",
+      errQuota: "The service is busy / limit reached. Please wait a little and try again.",
+      errNetwork: "Could not reach the service. Check your internet and try again."
+    },
+    hi: {
+      credit: "अंकुश शर्मा और मोहित द्वारा निर्मित · कक्षा ग्यारहवीं-अ · जीबीएसएसएस तुकमीरपुर",
+      title: "एआई पौधा चिकित्सक",
+      powered: "एआई उपकरण द्वारा संचालित",
+      subtitle: "पत्ती की तस्वीर लें, बीमारी पहचानें और सही उपचार सरल भाषा में जानें।",
+      aboutTitle: "इस सॉफ़्टवेयर के बारे में",
+      slide1: "🌾 एआई पौधा चिकित्सक किसानों को फसलों को बीमारी फैलने से पहले बचाने में मदद के लिए बनाया गया है।",
+      slide2: "📷 पत्ती की तस्वीर लें — लाइव कैमरा या गैलरी से — और तुरंत निदान पाएँ।",
+      slide3: "🔬 पौधों की प्रजातियों की पहचान और बीमारियों का जल्दी पता लगाने के लिए उन्नत एआई द्वारा संचालित।",
+      slide4: "🌱 सुरक्षित जैविक उपचार और आवश्यकता पड़ने पर रासायनिक उपचार का सुझाव देता है।",
+      slide5: "⚡ कोई लॉगिन नहीं, कोई सेटअप नहीं, कोई शुल्क नहीं — किसानों के लिए सरल भाषा में कुछ सेकंड में परिणाम।",
+      apiKeyTitle: "एपीआई कुंजी",
+      apiKeyStatus: "✓ तैयार है",
+      apiKeyHint: "aistudio.google.com/apikey पर निःशुल्क कुंजी प्राप्त करें। यह आपके उपकरण पर ही सहेजी जाती है।",
+      camEmpty: "पत्ती के विश्लेषण के लिए तैयार",
+      camEmptySub: "कैमरा खुलेगा, या यहाँ स्पर्श करके गैलरी से तस्वीर चुनें। तस्वीर को यहाँ खींचकर भी डाल सकते हैं।",
+      btnAnalyze: "विश्लेषण करें",
+      btnUpload: "तस्वीर चुनें",
+      statusAnalyzing: "एआई से परामर्श हो रहा है...",
+      resDiseaseLabel: "रोग / कीट",
+      resSymptomsLabel: "लक्षण",
+      resOrganicLabel: "🌱 जैविक उपचार",
+      resChemicalLabel: "🧪 रासायनिक उपचार",
+      footer: "परिणाम एआई द्वारा बनाए गए हैं। महत्त्वपूर्ण फसलों के लिए स्थानीय विशेषज्ञ से परामर्श लें।",
+      modalTitle: "पौधा रोग विशेषज्ञ",
+      modalWelcome: "मेरी विज्ञान परियोजना में आपका स्वागत है! अपना कार्य प्रस्तुत करने का अवसर देने के लिए आप सभी का धन्यवाद।",
+      modalStudent: "विद्यार्थी:",
+      modalSchool: "विद्यालय:",
+      modalId: "विद्यार्थी पहचान संख्या:",
+      modalRoll: "अनुक्रमांक:",
+      modalAboutTitle: "परियोजना के बारे में:",
+      modalAboutText: "यह वेब ऐप किसानों को पत्ती की तस्वीर लेकर पौधों की बीमारियों का जल्दी पता लगाने में मदद करता है। यह जैविक और रासायनिक उपचार का सुझाव देता है।",
+      modalFeedbackTitle: "प्रतिक्रिया:",
+      modalFeedbackText: "कृपया इस वेबसाइट के बारे में अपने विचार साझा करें और इसे और बेहतर बनाने के लिए सलाह दें।",
+      modalContact: "संपर्क:",
+      modalBtn: "बंद करें और प्रवेश करें",
+      dontShow: "हर बार मत दिखाओ",
+      aiPromptLang: "Hindi",
+      alertNoKey: "कृपया पहले एपीआई कुंजी दर्ज करें।",
+      alertNoImage: "विश्लेषण के लिए कोई तस्वीर नहीं है। कृपया तस्वीर लें या चुनें।",
+      alertCamError: "कैमरा उपलब्ध नहीं है या अनुमति नहीं मिली। कृपया गैलरी से तस्वीर चुनें।",
+      stepPhoto: "तस्वीर लें",
+      stepCheck: "जाँच",
+      stepTreat: "उपचार",
+      prev: "पिछला",
+      next: "अगला",
+      swipeHint: "स्वाइप करके भी बदल सकते हैं — बिंदु पर स्पर्श करें।",
+      photoTipsTitle: "📸 अच्छी तस्वीर कैसे लें?",
+      photoTipsHint: "सही तस्वीर का अर्थ है सही जाँच। इन चार बातों का ध्यान रखें:",
+      tip1Title: "1. एक पत्ती, निकट से",
+      tip1Text: "पूरा पौधा मत लें। रोग वाली एक पत्ती को फ्रेम के बीच में रखें, ताकि दाग स्पष्ट दिखें।",
+      tip2Title: "2. उजाले में लें",
+      tip2Text: "दिन के उजाले में लें। अँधेरी या छाया वाली तस्वीर में दाग छिप जाते हैं।",
+      tip3Title: "3. सीधा, बिना हिलाए",
+      tip3Text: "फ़ोन को स्थिर रखें। धुंधली तस्वीर पर गलत परिणाम आ सकता है।",
+      tip4Title: "4. दोनों ओर जाँच करें",
+      tip4Text: "यदि नीचे की ओर भी दाग हैं, तो उसकी भी एक तस्वीर अलग से जाँच करें।",
+      saveKey: "कुंजी सहेजें",
+      clearKey: "कुंजी हटाएँ",
+      keyPrivacy: "कुंजी केवल आपके इसी फ़ोन/ब्राउज़र में सहेजी जाती है — यह वेबसाइट उसे कहीं और नहीं भेजती।",
+      switchCam: "🔄 कैमरा बदलें",
+      retake: "↩ दोबारा लें",
+      removePhoto: "✕ तस्वीर हटाएँ",
+      speak: "सुनें",
+      copyTreat: "उपचार की प्रतिलिपि बनाएँ",
+      share: "साझा करें",
+      print: "रिपोर्ट छापें",
+      resultSavedNote: "यह परिणाम आपके फ़ोन में इतिहास में भी सहेजा गया है — नीचे देखें।",
+      historyTitle: "🕘 पिछली जाँच",
+      historyHint: "केवल इसी उपकरण पर सहेजी जाती है। किसी भी प्रविष्टि पर स्पर्श करके पुराना परिणाम दोबारा देखें।",
+      clearHistory: "इतिहास साफ़ करें",
+      emptyHistory: "अभी कोई पिछली जाँच नहीं है। पहला परिणाम यहीं दिखेगा।",
+      guideTitle: "🌿 सामान्य बीमारियाँ — सामान्य जानकारी",
+      guideHint: "यह केवल सामान्य जानकारी है, किसी तस्वीर का निदान नहीं। मात्रा के लिए स्थानीय कृषि अधिकारी से पूछें।",
+      g1Title: "पत्ती पर काले/भूरे दाग",
+      g1Text: "पत्ती पर गोल या अनियमित दाग दिखते हैं, जो धीरे-धीरे बढ़ते हैं। रोग वाली पत्ती को तोड़कर अलग करें, पौधे के आस-पास साफ़-सफ़ाई रखें।",
+      g2Title: "सफ़ेद चूर्ण जैसा जमाव",
+      g2Text: "पत्ती पर सफ़ेद चूर्ण जमा होता है। हवा का आना-जाना बढ़ाएँ, पौधों में अधिक भीड़ न रखें।",
+      g3Title: "छोटे कीड़े, चिपके हुए",
+      g3Text: "नयी कोमल पत्ती पर छोटे हरे/काले कीड़े चिपके मिलते हैं। पानी की हल्की धार से धो सकते हैं, अधिक होने पर विशेषज्ञ से सलाह लें।",
+      g4Title: "पत्ती पीली पड़ना",
+      g4Text: "पानी अधिक/कम, धूप की कमी या पोषण की कमी से भी पत्ती पीली होती है — यह हमेशा बीमारी नहीं होती।",
+      g5Title: "पौधा मुरझाना",
+      g5Text: "यदि मिट्टी सूखी है तो पानी दें। यदि मिट्टी गीली होने पर भी मुरझा रहा है, तो जड़ की समस्या हो सकती है — विशेषज्ञ को दिखाएँ।",
+      preventTitle: "✅ बचाव की आदतें",
+      preventHint: "टिक करें — यह आपके फ़ोन पर सहेजा जाएगा।",
+      prevent1: "रोग वाली पत्ती को जल्दी हटाएँ, स्वस्थ पौधों से दूर रखें",
+      prevent2: "सुबह पानी दें, जड़ों में — शाम को पत्तियों पर नहीं",
+      prevent3: "पौधों के बीच जगह रखें ताकि हवा जा सके",
+      prevent4: "रोग वाले पौधे पर काम के बाद औज़ार साफ़ करें",
+      prevent5: "हर बार एक ही जगह एक ही फ़सल न लगाएँ",
+      faqTitle: "❓ अक्सर पूछे जाने वाले प्रश्न",
+      faq1Q: "तस्वीर लेने के बाद परिणाम कितनी देर में आता है?",
+      faq1A: "आम तौर पर कुछ सेकंड में, इंटरनेट की गति पर निर्भर करता है। यदि कुंजी गलत है या नेट नहीं है, तो त्रुटि दिखेगी — कोई नकली परिणाम नहीं बनाया जाता।",
+      faq2Q: "मेरी तस्वीर या कुंजी कहीं अपलोड होती है?",
+      faq2A: "कुंजी केवल आपके ब्राउज़र में रहती है। तस्वीर केवल जाँच के लिए एआई सेवा को भेजी जाती है, और इतिहास केवल आपके उपकरण पर सहेजा जाता है।",
+      faq3Q: "यदि परिणाम गलत लगे तो क्या करें?",
+      faq3A: "दोबारा अच्छी रोशनी में, निकट से तस्वीर लें। बड़ी फ़सल के लिए निर्णय लेने से पहले स्थानीय कृषि विशेषज्ञ से अवश्य पूछें।",
+      faq4Q: "रासायनिक दवा की मात्रा क्यों नहीं लिखी होती?",
+      faq4A: "मात्रा फ़सल, उम्र और क्षेत्र पर निर्भर करती है। गलत मात्रा हानि कर सकती है, इसलिए यहाँ मात्रा का अनुमान नहीं दिया जाता — पैकेट पर लिखे निर्देश या विशेषज्ञ की सलाह मानें।",
+      copied: "उपचार की प्रतिलिपि बन गई!",
+      shared: "साझा किया जा रहा है…",
+      noShare: "इस ब्राउज़र में साझा करने की सुविधा नहीं है — उपचार की प्रतिलिपि बना दी गई है।",
+      historyCleared: "इतिहास साफ़ हो गया।",
+      keySaved: "कुंजी इस उपकरण पर सहेजी गई।",
+      keyCleared: "कुंजी हटा दी गई।",
+      photoRemoved: "तस्वीर हटा दी गई।",
+      darkPhoto: "यह तस्वीर बहुत अँधेरी लग रही है। बेहतर परिणाम के लिए अच्छी रोशनी में दोबारा लें।",
+      offlineWarn: "लगता है आप ऑफ़लाइन हैं। जाँच से पहले इंटरनेट से जुड़ें।",
+      statusSteps: ["एआई से परामर्श हो रहा है…", "पत्ती को ध्यान से देख रहे हैं…", "दाग और रंग जाँच रहे हैं…", "उपचार तैयार कर रहे हैं…"],
+      errInvalidKey: "एपीआई कुंजी गलत लग रही है। कुंजी जाँचकर दोबारा सहेजें।",
+      errQuota: "सेवा व्यस्त है / सीमा पूरी हो गई है। थोड़ी देर रुककर दोबारा प्रयास करें।",
+      errNetwork: "सेवा तक नहीं पहुँच सके। इंटरनेट जाँचकर दोबारा प्रयास करें।",
+    },
+    ta: {
+      credit: "அன்குஷ் சர்மா மற்றும் மோகித் உருவாக்கியது · பதினொன்றாம் வகுப்பு-அ · ஜிபிஎஸ்எஸ்எஸ் துக்மீர்பூர்",
+      title: "ஏஐ தாவர மருத்துவர்", powered: "ஏஐ கருவி மூலம் இயக்கப்படுகிறது",
+      subtitle: "இலையின் புகைப்படம் எடுங்கள், நோயை அறியுங்கள், சரியான சிகிச்சையை எளிய மொழியில் தெரிந்து கொள்ளுங்கள்.",
+      aboutTitle: "இந்த மென்பொருள் பற்றி",
+      slide1: "🌾 பயிர்களை நோயிலிருந்து பாதுகாக்க விவசாயிகளுக்கு உதவ ஏஐ தாவர மருத்துவர் உருவாக்கப்பட்டுள்ளது.",
+      slide2: "📷 ஒரு இலையின் புகைப்படத்தை எடுத்து உடனடி நோயறிதலைப் பெறுங்கள்.",
+      slide3: "🔬 தாவர இனங்களை அடையாளம் கண்டு நோய்களைக் கண்டறிய மேம்பட்ட ஏஐ மூலம் இயக்கப்படுகிறது.",
+      slide4: "🌱 பாதுகாப்பான கரிம மற்றும் தேவைப்பட்டால் இரசாயன சிகிச்சைகளை பரிந்துரைக்கிறது.",
+      slide5: "⚡ உள்நுழைவு இல்லை, அமைவு இல்லை, கட்டணம் இல்லை — விவசாயிகளுக்கு எளிய மொழியில் விரைவான முடிவுகள்.",
+      apiKeyTitle: "ஏபிஐ விசை", apiKeyStatus: "✓ உள்ளமைக்கப்பட்டது",
+      apiKeyHint: "aistudio.google.com/apikey இல் இலவச விசையைப் பெறுங்கள். உங்கள் சாதனத்தில் சேமிக்கப்பட்டது.",
+      camEmpty: "ஒரு இலையை பகுப்பாய்வு செய்ய தயார்", camEmptySub: "கேமரா திறக்கும், அல்லது இங்கே தட்டி கேலரியில் இருந்து புகைப்படம் தேர்வு செய்யுங்கள். புகைப்படத்தை இங்கே இழுத்தும் போடலாம்.",
+      btnAnalyze: "பகுப்பாய்வு செய்", btnUpload: "பதிவேற்று", statusAnalyzing: "ஏஐ ஆலோசனை...",
+      resDiseaseLabel: "நோய் / பூச்சி", resSymptomsLabel: "அறிகுறிகள்",
+      resOrganicLabel: "🌱 கரிம சிகிச்சை", resChemicalLabel: "🧪 இரசாயன சிகிச்சை",
+      footer: "முடிவுகள் ஏஐ மூலம் உருவாக்கப்பட்டவை. முக்கியமான பயிர்களுக்கு, உள்ளூர் நிபுணரை அணுகவும்.",
+      modalTitle: "தாவர நோய் நிபுணர்",
+      modalWelcome: "எனது அறிவியல் திட்டத்திற்கு வருக! எனது வேலையை வழங்க இந்த வாய்ப்பை வழங்கியதற்கு நன்றி.",
+      modalStudent: "மாணவர்:", modalSchool: "பள்ளி:", modalId: "மாணவர் ஐடி:", modalRoll: "ரோல் எண்:",
+      modalAboutTitle: "திட்டம் பற்றி:", modalAboutText: "இந்த வலை ஆப் விவசாயிகளுக்கு இலையின் புகைப்படம் எடுப்பதன் மூலம் தாவர நோய்களை விரைவாகக் கண்டறிய உதவுகிறது.",
+      modalFeedbackTitle: "கருத்து:", modalFeedbackText: "இந்த வலையைப் பற்றிய உங்கள் எண்ணங்களைப் பகிரவும், மேம்படுத்த ஆலோசனை வழங்கவும்.",
+      modalContact: "தொடர்பு:", modalBtn: "மூடு & உள்ளே செல்", dontShow: "மீண்டும் காட்ட வேண்டாம்",
+      aiPromptLang: "Tamil",
+      alertNoKey: "முதலில் ஏபிஐ விசையை உள்ளிடவும்.", alertNoImage: "பகுப்பாய்வு செய்ய படம் இல்லை. புகைப்படம் எடுக்கவும் அல்லது பதிவேற்றவும்.",
+      alertCamError: "கேமரா அணுகல் மறுக்கப்பட்டது. படத்தைப் பதிவேற்றவும்.",
+      stepPhoto: "புகைப்படம்", stepCheck: "சோதனை", stepTreat: "சிகிச்சை", prev: "முன்", next: "அடுத்து",
+      swipeHint: "ஸ்வைப் செய்தும் மாற்றலாம் — புள்ளியைத் தட்டுங்கள்.",
+      photoTipsTitle: "📸 நல்ல புகைப்படம் எப்படி எடுப்பது?", photoTipsHint: "நல்ல புகைப்படம் = நல்ல சோதனை. இந்த 4 விஷயங்களை நினைவில் வையுங்கள்:",
+      tip1Title: "1. ஒரு இலை, அருகில் இருந்து", tip1Text: "முழு செடியையும் எடுக்க வேண்டாம். நோயுற்ற ஒரு இலையை நடுவில் வையுங்கள், புள்ளிகள் தெளிவாக தெரியும்.",
+      tip2Title: "2. நல்ல வெளிச்சத்தில் எடுங்கள்", tip2Text: "பகல் வெளிச்சத்தில் எடுங்கள். இருட்டு புகைப்படத்தில் புள்ளிகள் மறையும்.",
+      tip3Title: "3. நேராக, அசையாமல்", tip3Text: "போனை அசையாமல் வையுங்கள். மங்கலான புகைப்படம் தவறான முடிவை தரலாம்.",
+      tip4Title: "4. இரு பக்கமும் பாருங்கள்", tip4Text: "கீழ் பக்கத்திலும் புள்ளிகள் இருந்தால், அதையும் தனியாக சோதியுங்கள்.",
+      saveKey: "விசையை சேமி", clearKey: "விசையை நீக்கு", keyPrivacy: "விசை இந்த போன்/உலாவியில் மட்டும் சேமிக்கப்படும் — இந்த இணையதளம் அதை வேறு எங்கும் அனுப்பாது.",
+      switchCam: "🔄 கேமரா மாற்று", retake: "↩ மீண்டும் எடு", removePhoto: "✕ புகைப்படம் நீக்கு",
+      speak: "கேளுங்கள்", copyTreat: "சிகிச்சையை நகலெடு", share: "பகிர்", print: "அறிக்கை அச்சிடு",
+      resultSavedNote: "இந்த முடிவு உங்கள் போனில் வரலாற்றிலும் சேமிக்கப்பட்டது — கீழே பாருங்கள்.",
+      historyTitle: "🕘 கடந்த சோதனைகள்", historyHint: "இந்த சாதனத்தில் மட்டும் சேமிக்கப்படும். பழைய முடிவை மீண்டும் பார்க்க ஒன்றைத் தட்டுங்கள்.",
+      clearHistory: "வரலாற்றை நீக்கு", emptyHistory: "இன்னும் கடந்த சோதனை இல்லை. முதல் முடிவு இங்கே தோன்றும்.",
+      guideTitle: "🌿 பொதுவான பிரச்சனைகள் — பொது தகவல்", guideHint: "இது பொது தகவல் மட்டுமே, எந்த புகைப்படத்தின் நோயறிதல் அல்ல. அளவுக்கு உள்ளூர் வேளாண் அதிகாரியை கேளுங்கள்.",
+      g1Title: "இலையில் கருப்பு/பழுப்பு புள்ளிகள்", g1Text: "இலையில் வட்ட அல்லது ஒழுங்கற்ற புள்ளிகள் தோன்றி மெதுவாக வளரும். நோயுற்ற இலையை தனியாக நீக்கி, சுற்றுப்புறத்தை சுத்தமாக வையுங்கள்.",
+      g2Title: "வெள்ளை பொடி போன்ற படிவு", g2Text: "இலையில் வெள்ளை பொடி சேரும். காற்றோட்டத்தை அதிகரித்து, செடிகளை நெருக்கமாக வைக்காதீர்கள்.",
+      g3Title: "இலையில் ஒட்டிய சிறு பூச்சிகள்", g3Text: "மென்மையான புதிய இலைகளில் சிறு பச்சை/கருப்பு பூச்சிகள் ஒட்டியிருக்கும். மெதுவான நீரால் கழுவலாம்; அதிகமாக இருந்தால் நிபுணரை கேளுங்கள்.",
+      g4Title: "இலை மஞ்சளாகுதல்", g4Text: "அதிக/குறைந்த நீர், சூரிய ஒளி குறைவு அல்லது ஊட்டச்சத்து குறைவாலும் இலை மஞ்சளாகும் — இது எப்போதும் நோய் அல்ல.",
+      g5Title: "செடி வாடுதல்", g5Text: "மண் உலர்ந்திருந்தால் நீர் கொடுங்கள். மண் ஈரமாக இருந்தும் வாடினால், வேர் பிரச்சனை இருக்கலாம் — நிபுணரிடம் காட்டுங்கள்.",
+      preventTitle: "✅ நோயை தடுக்கும் பழக்கங்கள்", preventHint: "டிக் செய்யுங்கள் — இது உங்கள் போனில் சேமிக்கப்படும்.",
+      prevent1: "நோயுற்ற இலைகளை விரைவில் நீக்கி, ஆரோக்கியமான செடிகளிடம் இருந்து தள்ளி வையுங்கள்", prevent2: "காலையில் நீர் கொடுங்கள், வேர்களில் — மாலையில் இலைகளில் அல்ல",
+      prevent3: "செடிகளுக்கு இடையே இடைவெளி விடுங்கள், காற்று செல்ல", prevent4: "நோயுற்ற செடியில் வேலை செய்த பின் கருவிகளை சுத்தம் செய்யுங்கள்", prevent5: "ஒவ்வொரு முறையும் ஒரே இடத்தில் ஒரே பயிரை நட வேண்டாம்",
+      faqTitle: "❓ அடிக்கடி கேட்கப்படும் கேள்விகள்",
+      faq1Q: "புகைப்படம் எடுத்த பின் முடிவு எவ்வளவு நேரத்தில் வரும்?", faq1A: "பொதுவாக சில வினாடிகளில், இணைய வேகத்தை பொறுத்து. விசை தவறாக இருந்தால் அல்லது நெட் இல்லை என்றால் பிழை தோன்றும் — போலி முடிவு உருவாக்கப்படாது.",
+      faq2Q: "என் புகைப்படம் அல்லது விசை எங்காவது பதிவேற்றப்படுமா?", faq2A: "விசை உங்கள் உலாவியில் மட்டும் இருக்கும். புகைப்படம் சோதனைக்காக மட்டும் ஏஐ சேவைக்கு அனுப்பப்படும், வரலாறு உங்கள் சாதனத்தில் மட்டும் சேமிக்கப்படும்.",
+      faq3Q: "முடிவு தவறாக தோன்றினால் என்ன செய்வது?", faq3A: "நல்ல வெளிச்சத்தில், அருகில் இருந்து மீண்டும் புகைப்படம் எடுங்கள். பெரிய பயிருக்கு முடிவு எடுக்கும் முன் உள்ளூர் வேளாண் நிபுணரை கேளுங்கள்.",
+      faq4Q: "இரசாயன மருந்தின் அளவு ஏன் எழுதப்படவில்லை?", faq4A: "அளவு பயிர், வயது மற்றும் பகுதியை பொறுத்தது. தவறான அளவு தீங்கு விளைவிக்கும், எனவே இங்கு அளவு யூகம் தரப்படவில்லை — பாக்கெட் வழிமுறைகள் அல்லது நிபுணர் ஆலோசனையை பின்பற்றுங்கள்.",
+      copied: "சிகிச்சை நகலெடுக்கப்பட்டது!", shared: "பகிர்வு திறக்கப்படுகிறது…", noShare: "இந்த உலாவியில் பகிர்வு இல்லை — சிகிச்சை நகலெடுக்கப்பட்டது.",
+      historyCleared: "வரலாறு நீக்கப்பட்டது.", keySaved: "விசை இந்த சாதனத்தில் சேமிக்கப்பட்டது.", keyCleared: "விசை நீக்கப்பட்டது.",
+      photoRemoved: "புகைப்படம் நீக்கப்பட்டது.", darkPhoto: "இந்த புகைப்படம் மிகவும் இருட்டாக தெரிகிறது. சிறந்த முடிவுக்கு நல்ல வெளிச்சத்தில் மீண்டும் எடுங்கள்.",
+      offlineWarn: "நீங்கள் ஆஃப்லைனில் இருப்பதாக தெரிகிறது. பகுப்பாய்வு செய்யும் முன் இணையத்துடன் இணையுங்கள்.",
+      statusSteps: ["ஏஐ ஆலோசனை…", "இலையை கவனமாக பார்க்கிறோம்…", "புள்ளிகள் மற்றும் நிறத்தை சோதிக்கிறோம்…", "சிகிச்சை தயார் செய்கிறோம்…"],
+      errInvalidKey: "ஏபிஐ விசை தவறாக தெரிகிறது. விசையை சரிபார்த்து மீண்டும் சேமியுங்கள்.",
+      errQuota: "சேவை பிஸியாக உள்ளது / வரம்பு முடிந்தது. சிறிது நேரம் காத்திருந்து மீண்டும் முயற்சியுங்கள்.",
+      errNetwork: "சேவையை அடைய முடியவில்லை. இணையத்தை சரிபார்த்து மீண்டும் முயற்சியுங்கள்."
+    }
+  };
+  let currentLang = "en";
+  window.changeLanguage = function(lang, btn) {
+    currentLang = lang;
+    document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      if (translations[lang] && translations[lang][key]) el.textContent = translations[lang][key];
+    });
+    const ph = { en: "Paste your API key here...", hi: "अपनी API कुंजी यहाँ पेस्ट करें...", ta: "உங்கள் API விசையை இங்கே ஒட்டவும்..." };
+    if (apiKeyInput) apiKeyInput.placeholder = ph[lang] || ph.en;
+    renderHistory(); renderPrevent();
+  };
+
+  /* extra pure-language strings for new features */
+  const EXTRA = {
+    en: {
+      noteTitle: "My note for this result", notePh: "Write your own note here...", noteSave: "Save note", noteSaved: "Note saved.",
+      exportTxt: "Download report (.txt)", copyAll: "Copy full result", exportCsv: "Export history (.csv)", csvSaved: "History file downloaded.",
+      histSearchPh: "Search plant or disease...", histFilterAll: "All", histFilterHealthy: "Healthy only", histFilterDiseased: "Diseased only", histFilterStar: "Starred",
+      histSortNew: "Newest first", histSortOld: "Oldest first", histSortPlant: "By plant name",
+      compareClear: "Clear comparison", compareTitle: "Comparison", compareSelect: "Select 2 items to compare", compareHint: "Tap Compare on two history items.",
+      settingsTitle: "⚙️ Settings", settingsHint: "These settings are saved only on this device.",
+      contrastBtn: "High contrast: Off", soundBtn: "Result sound: Off", vibrateBtn: "Vibration: Off",
+      dailyTipTitle: "💡 Tip of the Day", dailyTipHint: "A general tip — it changes every day, it is not a diagnosis.",
+      waterTitle: "Water Log", waterHint: "Tap when you water the plant. This is your own record, nothing is checked automatically.",
+      waterBtn: "Watered today", waterDone: "Already logged for today.",
+      diaryTitle: "📓 My Plant Diary", diaryHint: "Write the plant name and what you noticed. Saved only on this device.",
+      diaryPlantPh: "Plant name", diaryNotePh: "What did you notice?", diaryAdd: "Add to diary", diaryEmpty: "No diary entry yet.", diarySaved: "Diary entry added.",
+      remindTitle: "⏰ Follow-up Reminder", remindHint: "Set a date to check the same plant again. A reminder is only a date on this device — it does not send a notification by itself.",
+      remindNotePh: "Which plant?", remindAdd: "Set reminder", remindEmpty: "No reminder yet.", remindDue: "Due", remindSaved: "Reminder set.",
+      guideTitle2: "🌿 More Common Problems",
+      g6Title: "Roots rotting from too much water", g6Text: "If the soil stays wet for days and the plant wilts, the pot may not drain well. Let the soil dry a little between waterings and check that water can drain out.",
+      g7Title: "Scorched patches from strong sun", g7Text: "Pale, dry patches on leaves that face harsh afternoon sun can be sunburn, not infection. Move a potted plant to lighter shade for a few days and watch it.",
+      g8Title: "Mottled, crinkled leaves", g8Text: "A mosaic-like pattern with crinkled growth can spread through tools and hands. Do not take cuttings from such a plant, clean tools, and ask an expert before replanting nearby.",
+      quizTitle: "🧠 Quick Quiz — For Students", quizHint: "5 questions. Your score is shown only on this screen and is not sent anywhere.",
+      quizStart: "Start quiz", quizNext: "Next", quizFinish: "See score", quizRetry: "Try again", quizCorrect: "Correct!", quizWrong: "Not quite — the right answer is shown.",
+      glossTitle: "📖 Simple Glossary", glossHint: "Words used in the result, in simple language.",
+      zoomHint: "Tap the photo to see it bigger.", needPlant: "Please write the plant name first.", needDate: "Please pick a date first."
+    },
+    hi: {
+      noteTitle: "इस परिणाम के लिए मेरी टिप्पणी", notePh: "यहाँ अपनी टिप्पणी लिखें...", noteSave: "टिप्पणी सहेजें", noteSaved: "टिप्पणी सहेजी गई।",
+      exportTxt: "रिपोर्ट डाउनलोड करें", copyAll: "पूरा परिणाम कॉपी करें", exportCsv: "इतिहास डाउनलोड करें", csvSaved: "इतिहास फ़ाइल डाउनलोड हो गई।",
+      histSearchPh: "पौधा या रोग खोजें...", histFilterAll: "सभी", histFilterHealthy: "केवल स्वस्थ", histFilterDiseased: "केवल रोगग्रस्त", histFilterStar: "तारांकित",
+      histSortNew: "नया पहले", histSortOld: "पुराना पहले", histSortPlant: "पौधे के नाम से",
+      compareClear: "तुलना साफ़ करें", compareTitle: "तुलना", compareSelect: "तुलना के लिए 2 प्रविष्टियाँ चुनें", compareHint: "इतिहास की दो प्रविष्टियों पर तुलना दबाएँ।",
+      settingsTitle: "⚙️ सेटिंग", settingsHint: "ये सेटिंग केवल इसी उपकरण पर सहेजी जाती हैं।",
+      contrastBtn: "अधिक कंट्रास्ट: बंद", soundBtn: "परिणाम की ध्वनि: बंद", vibrateBtn: "कंपन: बंद",
+      dailyTipTitle: "💡 आज की सलाह", dailyTipHint: "एक सामान्य सलाह — यह हर दिन बदलती है, यह कोई निदान नहीं है।",
+      waterTitle: "पानी का रिकॉर्ड", waterHint: "पौधे को पानी देने पर दबाएँ। यह आपका अपना रिकॉर्ड है, कुछ भी अपने आप नहीं जाँचा जाता।",
+      waterBtn: "आज पानी दिया", waterDone: "आज का रिकॉर्ड पहले ही बन गया है।",
+      diaryTitle: "📓 मेरी पौधा डायरी", diaryHint: "पौधे का नाम और जो देखा, वह लिखें। केवल इसी उपकरण पर सहेजा जाता है।",
+      diaryPlantPh: "पौधे का नाम", diaryNotePh: "आपने क्या देखा?", diaryAdd: "डायरी में जोड़ें", diaryEmpty: "अभी कोई डायरी प्रविष्टि नहीं है।", diarySaved: "डायरी प्रविष्टि जुड़ गई।",
+      remindTitle: "⏰ दोबारा जाँच की याद", remindHint: "उसी पौधे को दोबारा जाँचने की तारीख़ तय करें। यह याद केवल इसी उपकरण पर एक तारीख़ है — यह अपने आप सूचना नहीं भेजती।",
+      remindNotePh: "कौन सा पौधा?", remindAdd: "याद तय करें", remindEmpty: "अभी कोई याद नहीं है।", remindDue: "समय हो गया", remindSaved: "याद तय हो गई।",
+      guideTitle2: "🌿 अन्य सामान्य समस्याएँ",
+      g6Title: "अधिक पानी से जड़ें सड़ना", g6Text: "यदि मिट्टी कई दिन तक गीली रहे और पौधा मुरझाए, तो गमले से पानी निकल नहीं पा रहा होगा। पानी देने के बीच मिट्टी को थोड़ा सूखने दें और जाँचें कि पानी बाहर निकल सके।",
+      g7Title: "तेज़ धूप से झुलसे धब्बे", g7Text: "कड़ी दोपहर की धूप की ओर वाली पत्तियों पर हल्के, सूखे धब्बे संक्रमण नहीं, धूप से झुलसना भी हो सकते हैं। गमले वाले पौधे को कुछ दिन हल्की छाया में रखें और देखें।",
+      g8Title: "चितकबरे, सिकुड़े पत्ते", g8Text: "चितकबरा पैटर्न और सिकुड़ी वृद्धि औज़ारों और हाथों से फैल सकती है। ऐसे पौधे से कलम न लें, औज़ार साफ़ करें और आस-पास दोबारा लगाने से पहले विशेषज्ञ से पूछें।",
+      quizTitle: "🧠 छोटी प्रश्नोत्तरी — विद्यार्थियों के लिए", quizHint: "5 प्रश्न। अंक केवल इसी स्क्रीन पर दिखता है और कहीं नहीं भेजा जाता।",
+      quizStart: "प्रश्नोत्तरी शुरू करें", quizNext: "अगला", quizFinish: "अंक देखें", quizRetry: "फिर से प्रयास करें", quizCorrect: "सही!", quizWrong: "ठीक नहीं — सही उत्तर दिखाया गया है।",
+      glossTitle: "📖 सरल शब्दावली", glossHint: "परिणाम में आए शब्द, सरल भाषा में।",
+      zoomHint: "तस्वीर को बड़ा देखने के लिए उस पर स्पर्श करें।", needPlant: "कृपया पहले पौधे का नाम लिखें।", needDate: "कृपया पहले तारीख़ चुनें।"
+    },
+    ta: {
+      noteTitle: "இந்த முடிவுக்கான என் குறிப்பு", notePh: "இங்கே உங்கள் குறிப்பை எழுதுங்கள்...", noteSave: "குறிப்பை சேமி", noteSaved: "குறிப்பு சேமிக்கப்பட்டது.",
+      exportTxt: "அறிக்கையை பதிவிறக்கு", copyAll: "முழு முடிவை நகலெடு", exportCsv: "வரலாற்றை பதிவிறக்கு", csvSaved: "வரலாற்று கோப்பு பதிவிறக்கப்பட்டது.",
+      histSearchPh: "செடி அல்லது நோயை தேடுங்கள்...", histFilterAll: "அனைத்தும்", histFilterHealthy: "ஆரோக்கியமானவை மட்டும்", histFilterDiseased: "நோயுற்றவை மட்டும்", histFilterStar: "நட்சத்திரமிட்டவை",
+      histSortNew: "புதியது முதலில்", histSortOld: "பழையது முதலில்", histSortPlant: "செடி பெயர்ப்படி",
+      compareClear: "ஒப்பீட்டை நீக்கு", compareTitle: "ஒப்பீடு", compareSelect: "ஒப்பிட 2 உருப்படிகளை தேர்வு செய்யுங்கள்", compareHint: "வரலாற்றில் இரண்டு உருப்படிகளில் ஒப்பிடு என்பதை தட்டுங்கள்.",
+      settingsTitle: "⚙️ அமைப்புகள்", settingsHint: "இந்த அமைப்புகள் இந்த சாதனத்தில் மட்டும் சேமிக்கப்படும்.",
+      contrastBtn: "அதிக மாறுபாடு: அணை", soundBtn: "முடிவு ஒலி: அணை", vibrateBtn: "அதிர்வு: அணை",
+      dailyTipTitle: "💡 இன்றைய குறிப்பு", dailyTipHint: "ஒரு பொது குறிப்பு — இது தினமும் மாறும், இது நோயறிதல் அல்ல.",
+      waterTitle: "நீர் பதிவு", waterHint: "செடிக்கு நீர் கொடுக்கும்போது தட்டுங்கள். இது உங்கள் சொந்த பதிவு, எதுவும் தானாக சோதிக்கப்படாது.",
+      waterBtn: "இன்று நீர் கொடுத்தேன்", waterDone: "இன்றைய பதிவு ஏற்கனவே உள்ளது.",
+      diaryTitle: "📓 என் செடி நாட்குறிப்பு", diaryHint: "செடி பெயர் மற்றும் நீங்கள் கவனித்ததை எழுதுங்கள். இந்த சாதனத்தில் மட்டும் சேமிக்கப்படும்.",
+      diaryPlantPh: "செடி பெயர்", diaryNotePh: "நீங்கள் என்ன கவனித்தீர்கள்?", diaryAdd: "நாட்குறிப்பில் சேர்", diaryEmpty: "இன்னும் நாட்குறிப்பு இல்லை.", diarySaved: "நாட்குறிப்பு சேர்க்கப்பட்டது.",
+      remindTitle: "⏰ மீண்டும் சோதனை நினைவூட்டல்", remindHint: "அதே செடியை மீண்டும் சோதிக்க தேதி அமைக்குங்கள். இது இந்த சாதனத்தில் ஒரு தேதி மட்டுமே — இது தானாக அறிவிப்பு அனுப்பாது.",
+      remindNotePh: "எந்த செடி?", remindAdd: "நினைவூட்டல் அமை", remindEmpty: "இன்னும் நினைவூட்டல் இல்லை.", remindDue: "நேரம் வந்துவிட்டது", remindSaved: "நினைவூட்டல் அமைக்கப்பட்டது.",
+      guideTitle2: "🌿 மேலும் பொதுவான பிரச்சனைகள்",
+      g6Title: "அதிக நீரால் வேர் அழுகல்", g6Text: "மண் பல நாட்கள் ஈரமாக இருந்து செடி வாடினால், தொட்டியில் நீர் வெளியேறாமல் இருக்கலாம். நீர் கொடுப்பதற்கு இடையே மண்ணை சிறிது உலர விடுங்கள், நீர் வெளியேற முடிகிறதா என்று பாருங்கள்.",
+      g7Title: "கடும் வெயிலால் எரிந்த புள்ளிகள்", g7Text: "கடும் மதிய வெயிலை எதிர்கொள்ளும் இலைகளில் வெளிர், உலர்ந்த புள்ளிகள் தொற்று அல்ல, வெயில் எரிச்சலாக இருக்கலாம். தொட்டி செடியை சில நாட்கள் லேசான நிழலில் வைத்து கவனியுங்கள்.",
+      g8Title: "புள்ளி புள்ளியான, சுருங்கிய இலைகள்", g8Text: "புள்ளி புள்ளி வடிவம் மற்றும் சுருங்கிய வளர்ச்சி கருவிகள் மற்றும் கைகள் மூலம் பரவலாம். அப்படிப்பட்ட செடியில் இருந்து கிளை எடுக்காதீர்கள், கருவிகளை சுத்தம் செய்யுங்கள், அருகில் மீண்டும் நடுவதற்கு முன் நிபுணரை கேளுங்கள்.",
+      quizTitle: "🧠 விரைவு வினாடி வினா — மாணவர்களுக்கு", quizHint: "5 கேள்விகள். உங்கள் மதிப்பெண் இந்த திரையில் மட்டும் காட்டப்படும், எங்கும் அனுப்பப்படாது.",
+      quizStart: "வினாடி வினாவை தொடங்கு", quizNext: "அடுத்து", quizFinish: "மதிப்பெண் பார்", quizRetry: "மீண்டும் முயற்சி", quizCorrect: "சரி!", quizWrong: "சரியில்லை — சரியான பதில் காட்டப்பட்டுள்ளது.",
+      glossTitle: "📖 எளிய சொற்களஞ்சியம்", glossHint: "முடிவில் வரும் சொற்கள், எளிய மொழியில்.",
+      zoomHint: "புகைப்படத்தை பெரிதாக பார்க்க அதை தட்டுங்கள்.", needPlant: "முதலில் செடி பெயரை எழுதுங்கள்.", needDate: "முதலில் தேதியை தேர்வு செய்யுங்கள்."
+    }
+  };
+  ["en","hi","ta"].forEach(l=>{ Object.assign(translations[l], EXTRA[l]); });
+  const TIPS = {
+    en: ["Check the underside of leaves too — many pests hide there.", "Water in the morning so leaves dry before night.", "Remove one diseased leaf early — it can protect the rest.", "Keep tools clean after touching a sick plant.", "Give plants space — crowded plants stay damp and get sick faster.", "A yellow leaf is not always disease — check water, light and soil first.", "Take a photo in daylight, close up, for a clearer check."],
+    hi: ["पत्तियों के नीचे की ओर भी देखें — कई कीट वहीं छिपते हैं।", "सुबह पानी दें ताकि रात से पहले पत्तियाँ सूख जाएँ।", "रोग वाली एक पत्ती जल्दी हटाएँ — इससे बाक़ी पौधा बच सकता है।", "रोग वाले पौधे को छूने के बाद औज़ार साफ़ करें।", "पौधों के बीच जगह रखें — भीड़ वाले पौधे गीले रहते हैं और जल्दी बीमार होते हैं।", "पीली पत्ती हमेशा बीमारी नहीं होती — पहले पानी, धूप और मिट्टी जाँचें।", "दिन के उजाले में, निकट से तस्वीर लें, ताकि जाँच स्पष्ट हो।"],
+    ta: ["இலைகளின் கீழ் பக்கத்தையும் பாருங்கள் — பல பூச்சிகள் அங்கே மறைந்திருக்கும்.", "காலையில் நீர் கொடுங்கள், இரவுக்கு முன் இலைகள் உலரும்.", "நோயுற்ற ஒரு இலையை விரைவில் நீக்குங்கள் — அது மற்ற செடியை காக்கும்.", "நோயுற்ற செடியை தொட்ட பின் கருவிகளை சுத்தம் செய்யுங்கள்.", "செடிகளுக்கு இடையே இடைவெளி விடுங்கள் — நெருக்கமான செடிகள் ஈரமாக இருந்து விரைவில் நோய்வாய்ப்படும்.", "மஞ்சள் இலை எப்போதும் நோய் அல்ல — முதலில் நீர், ஒளி, மண்ணை பாருங்கள்.", "பகல் வெளிச்சத்தில், அருகில் இருந்து புகைப்படம் எடுங்கள், சோதனை தெளிவாக இருக்கும்."]
+  };
+  const GLOSS = {
+    en: [["Fungus","A tiny living thing that can grow on damp leaves and cause spots."],["Pest","A small insect or creature that harms a plant."],["Symptom","A visible sign of a problem, like a spot or yellowing."],["Diagnosis","The name given to the problem after checking it."],["Organic treatment","Treatment made from natural things, not factory chemicals."]],
+    hi: [["कवक","गीली पत्तियों पर उगने वाला एक सूक्ष्म जीव, जिससे दाग हो सकते हैं।"],["कीट","पौधे को हानि पहुँचाने वाला छोटा कीड़ा या जीव।"],["लक्षण","समस्या का दिखने वाला संकेत, जैसे दाग या पीलापन।"],["निदान","जाँच के बाद समस्या को दिया गया नाम।"],["जैविक उपचार","प्राकृतिक चीज़ों से बना उपचार, कारख़ाने के रसायनों से नहीं।"]],
+    ta: [["பூஞ்சை","ஈரமான இலைகளில் வளரும் ஒரு சிறு உயிர், புள்ளிகளை உண்டாக்கும்."],["பூச்சி","செடிக்கு தீங்கு செய்யும் சிறு பூச்சி அல்லது உயிர்."],["அறிகுறி","பிரச்சனையின் தெரியும் அடையாளம், புள்ளி அல்லது மஞ்சள் போல."],["நோயறிதல்","சோதனைக்கு பின் பிரச்சனைக்கு கொடுக்கப்படும் பெயர்."],["கரிம சிகிச்சை","இயற்கை பொருட்களால் செய்யப்பட்ட சிகிச்சை, தொழிற்சாலை இரசாயனங்களால் அல்ல."]]
+  };
+  const QUIZ = {
+    en: [
+      {q:"What is the first good step before a diagnosis?", o:["Take a clear, close photo","Water the plant a lot","Remove all leaves","Add fertilizer"], a:0},
+      {q:"Why take the photo in daylight?", o:["Spots are clearly visible","The camera charges","The plant grows faster","It looks nice"], a:0},
+      {q:"What should you do with a diseased leaf?", o:["Keep it with healthy plants","Remove it separately","Ignore it","Paint over it"], a:1},
+      {q:"Who should decide a chemical dose?", o:["A guess","The packet instructions or an expert","A friend","A random post"], a:1},
+      {q:"Does a yellow leaf always mean disease?", o:["Yes, always","No — water, light or nutrition can also cause it"], a:1}
+    ],
+    hi: [
+      {q:"निदान से पहले पहला अच्छा कदम क्या है?", o:["स्पष्ट, निकट से तस्वीर लें","पौधे को बहुत पानी दें","सभी पत्तियाँ हटा दें","खाद डालें"], a:0},
+      {q:"तस्वीर दिन के उजाले में क्यों लें?", o:["दाग स्पष्ट दिखते हैं","कैमरा चार्ज होता है","पौधा तेज़ी से बढ़ता है","यह सुंदर लगती है"], a:0},
+      {q:"रोग वाली पत्ती के साथ क्या करें?", o:["उसे स्वस्थ पौधों के साथ रखें","उसे अलग से हटाएँ","उसे अनदेखा करें","उस पर रंग लगा दें"], a:1},
+      {q:"रासायनिक दवा की मात्रा कौन तय करे?", o:["एक अनुमान","पैकेट के निर्देश या विशेषज्ञ","एक मित्र","कोई भी पोस्ट"], a:1},
+      {q:"क्या पीली पत्ती हमेशा बीमारी का अर्थ है?", o:["हाँ, हमेशा","नहीं — पानी, धूप या पोषण भी कारण हो सकते हैं"], a:1}
+    ],
+    ta: [
+      {q:"நோயறிதலுக்கு முன் முதல் நல்ல படி என்ன?", o:["தெளிவான, அருகில் புகைப்படம் எடுங்கள்","செடிக்கு நிறைய நீர் கொடுங்கள்","அனைத்து இலைகளையும் நீக்குங்கள்","உரம் போடுங்கள்"], a:0},
+      {q:"பகல் வெளிச்சத்தில் புகைப்படம் ஏன் எடுக்க வேண்டும்?", o:["புள்ளிகள் தெளிவாக தெரியும்","கேமரா சார்ஜ் ஆகும்","செடி வேகமாக வளரும்","அது அழகாக இருக்கும்"], a:0},
+      {q:"நோயுற்ற இலையுடன் என்ன செய்ய வேண்டும்?", o:["ஆரோக்கியமான செடிகளுடன் வைக்குங்கள்","தனியாக நீக்குங்கள்","கண்டுகொள்ளாதீர்கள்","அதன் மேல் வண்ணம் பூசுங்கள்"], a:1},
+      {q:"இரசாயன மருந்து அளவை யார் முடிவு செய்ய வேண்டும்?", o:["ஒரு யூகம்","பாக்கெட் வழிமுறைகள் அல்லது நிபுணர்","ஒரு நண்பர்","ஏதோ ஒரு பதிவு"], a:1},
+      {q:"மஞ்சள் இலை எப்போதும் நோயை குறிக்குமா?", o:["ஆம், எப்போதும்","இல்லை — நீர், ஒளி அல்லது ஊட்டச்சத்தும் காரணமாக இருக்கலாம்"], a:1}
+    ]
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const apiKeyInput = $("apiKeyInput"), toggleKeyBtn = $("toggleKeyBtn"), keyHeader = $("keyHeader"), keyBody = $("keyBody"), keyStatus = $("keyStatus");
+  const camEmpty = $("camEmpty"), camActive = $("camActive"), previewWrap = $("previewWrap"), previewImg = $("previewImg"), cameraVideo = $("cameraVideo");
+  const captureBtn = $("captureBtn"), uploadBtn = $("uploadBtn"), galleryInput = $("galleryInput");
+  const statusBox = $("statusBox"), statusText = $("statusText"), alertBox = $("alertBox"), alertText = $("alertText");
+  const resultsCard = $("resultsCard"), resPlantName = $("resPlantName"), resStatusBadge = $("resStatusBadge"), resDisease = $("resDisease"), resSymptoms = $("resSymptoms"), resOrganic = $("resOrganic"), resChemical = $("resChemical");
+  const scanLaser = $("scanLaser"), previewLaser = $("previewLaser"), toastEl = $("toast"), topBar = $("topBar");
+  const GEMINI_API_KEY = "😊😊 YOUR_GEMINI_API_KEY_HERE 😊😊";
+  const MODEL_ID = "gemini-3.5-flash-lite";
+  const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/" + MODEL_ID + ":generateContent?key=";
+  const STORAGE_KEY = "gemini_api_key", HIST_KEY = "plant_history_v1", PREV_KEY = "plant_prevent_v1", MAX_DIMENSION = 1280;
+  let videoStream = null, currentImageBase64 = null, isAnalyzing = false, facingMode = "environment", lastResult = null, statusTimer = null;
+
+  function t(k){ return (translations[currentLang] && translations[currentLang][k]) || translations.en[k] || k; }
+  function showToast(msg){ toastEl.textContent = msg; toastEl.classList.add("show"); setTimeout(()=>toastEl.classList.remove("show"), 2600); }
+  function showAlert(message, kind){ alertBox.className = "alert " + (kind || "error") + " visible"; alertText.textContent = message; }
+  function hideAlert(){ alertBox.classList.remove("visible"); }
+  function setStep(n){
+    [1,2,3].forEach(i=>{ const el=$("step"+i); el.classList.remove("active","done"); if(i<n) el.classList.add("done"); if(i===n) el.classList.add("active"); });
+  }
+  /* reveal on scroll */
+  const io = new IntersectionObserver(es=>es.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target); } }), { threshold:.08 });
+  document.querySelectorAll(".reveal").forEach(el=>io.observe(el));
+  /* text size */
+  let textLevel = parseInt(localStorage.getItem("plant_text_level")||"0",10)||0;
+  function applyTextSize(){ document.body.classList.remove("text-big","text-small"); if(textLevel>0) document.body.classList.add("text-big"); if(textLevel<0) document.body.classList.add("text-small"); }
+  window.changeTextSize = function(d){ textLevel = Math.max(-1, Math.min(1, textLevel+d)); localStorage.setItem("plant_text_level", String(textLevel)); applyTextSize(); };
+  applyTextSize();
+  /* welcome modal - once */
+  window.closeWelcome = function(){ if($("dontShowAgain").checked){ try{ localStorage.setItem("plant_welcome_seen","1"); }catch(e){} } $("welcomeModal").style.display="none"; };
+  window.openWelcome = function(){ $("welcomeModal").style.display="flex"; };
+  try{ if(!localStorage.getItem("plant_welcome_seen")) $("welcomeModal").style.display="flex"; else $("welcomeModal").style.display="none"; }catch(e){}
+  /* carousel */
+  const slides = Array.from(document.querySelectorAll(".slide")), dotsWrap = $("sliderDots");
+  let slideIdx = 0, slideTimer = null, touchX = null;
+  slides.forEach((_,i)=>{ const b=document.createElement("button"); b.setAttribute("aria-label","Slide "+(i+1)); b.onclick=()=>goSlide(i,true); dotsWrap.appendChild(b); });
+  function goSlide(i, manual){
+    slideIdx = (i+slides.length)%slides.length;
+    slides.forEach((s,j)=>s.classList.toggle("on", j===slideIdx));
+    Array.from(dotsWrap.children).forEach((d,j)=>d.classList.toggle("on", j===slideIdx));
+    if(manual) restartSlideTimer();
+  }
+  function restartSlideTimer(){ clearInterval(slideTimer); slideTimer = setInterval(()=>goSlide(slideIdx+1), 4200); }
+  window.moveSlide = function(d){ goSlide(slideIdx+d, true); };
+  const vp = $("sliderViewport");
+  vp.addEventListener("touchstart", e=>{ touchX = e.touches[0].clientX; clearInterval(slideTimer); }, {passive:true});
+  vp.addEventListener("touchend", e=>{ if(touchX===null) return; const dx = e.changedTouches[0].clientX - touchX; if(Math.abs(dx)>40) goSlide(slideIdx + (dx<0?1:-1), true); else restartSlideTimer(); touchX=null; }, {passive:true});
+  vp.addEventListener("mouseenter", ()=>clearInterval(slideTimer)); vp.addEventListener("mouseleave", restartSlideTimer);
+  goSlide(0); restartSlideTimer();
+  /* prevention checklist - local only */
+  function getPrevent(){ try{ return JSON.parse(localStorage.getItem(PREV_KEY)||"[]"); }catch(e){ return []; } }
+  window.renderPrevent = function(){
+    const done = getPrevent(), list = $("preventList"); list.innerHTML = "";
+    [1,2,3,4,5].forEach(i=>{
+      const row = document.createElement("label"); row.className = "check-row" + (done.includes(i)?" done":"");
+      const cb = document.createElement("input"); cb.type="checkbox"; cb.checked = done.includes(i);
+      cb.onchange = ()=>{ let d=getPrevent(); d = cb.checked ? [...new Set([...d,i])] : d.filter(x=>x!==i); try{ localStorage.setItem(PREV_KEY, JSON.stringify(d)); }catch(e){} renderPrevent(); };
+      const sp = document.createElement("span"); sp.textContent = t("prevent"+i);
+      row.appendChild(cb); row.appendChild(sp); list.appendChild(row);
+    });
+  };
+  renderPrevent();
+  /* API key - original logic, kept local only */
+  function getApiKey(){
+    const fromInput = (apiKeyInput.value || "").trim();
+    if (fromInput && fromInput.length > 10) return fromInput;
+    let saved = ""; try{ saved = (localStorage.getItem(STORAGE_KEY) || "").trim(); }catch(e){}
+    if (saved && saved.length > 10) return saved;
+    if (GEMINI_API_KEY && GEMINI_API_KEY.indexOf("YOUR_GEMINI_API_KEY_HERE") === -1 && GEMINI_API_KEY.length > 20) return GEMINI_API_KEY.trim();
+    return "";
+  }
+  function updateKeyUI(){
+    const hasKey = !!getApiKey();
+    keyStatus.style.display = hasKey ? "block" : "none";
+    if (hasKey) keyBody.classList.add("collapsed"); else keyBody.classList.remove("collapsed");
+  }
+  function persistApiKey(){
+    const value = (apiKeyInput.value || "").trim();
+    try{ if (value) localStorage.setItem(STORAGE_KEY, value); else localStorage.removeItem(STORAGE_KEY); }catch(e){}
+    updateKeyUI();
+  }
+  window.saveKeyManually = function(){ persistApiKey(); if(getApiKey()) showToast(t("keySaved")); };
+  window.clearKey = function(){ apiKeyInput.value=""; try{ localStorage.removeItem(STORAGE_KEY); }catch(e){} updateKeyUI(); showToast(t("keyCleared")); };
+  (function hydrateApiKey(){
+    let saved = ""; try{ saved = localStorage.getItem(STORAGE_KEY) || ""; }catch(e){}
+    if (saved) apiKeyInput.value = saved;
+    else if (GEMINI_API_KEY && GEMINI_API_KEY.indexOf("YOUR_GEMINI_API_KEY_HERE") === -1 && GEMINI_API_KEY.length > 20) apiKeyInput.value = GEMINI_API_KEY.trim();
+    updateKeyUI();
+  })();
+  toggleKeyBtn.addEventListener("click", function(){
+    const isPassword = apiKeyInput.type === "password";
+    apiKeyInput.type = isPassword ? "text" : "password";
+    toggleKeyBtn.textContent = isPassword ? "🙈" : "👁️";
+  });
+  apiKeyInput.addEventListener("keyup", (e)=>{ if(e.key==="Enter"){ persistApiKey(); apiKeyInput.blur(); } });
+  apiKeyInput.addEventListener("blur", persistApiKey);
+  keyHeader.addEventListener("click", (e)=>{ if(e.target.closest('button') || e.target.closest('input')) return; if(getApiKey()) keyBody.classList.toggle("collapsed"); });
+
+  function setStatus(message){
+    if(message){ statusText.textContent = message; statusBox.classList.add("visible"); topBar.classList.add("on"); }
+    else { statusBox.classList.remove("visible"); topBar.classList.remove("on"); }
+  }
+  function startStatusCycle(){
+    const steps = t("statusSteps"); let i=0;
+    statusText.textContent = steps[0];
+    statusTimer = setInterval(()=>{ i=(i+1)%steps.length; statusText.textContent = steps[i]; }, 2600);
+  }
+  function stopStatusCycle(){ if(statusTimer){ clearInterval(statusTimer); statusTimer=null; } }
+  function showLoadingState(isLoading){
+    if(isLoading){ if(previewWrap.style.display==="block") previewLaser.classList.add("active"); else scanLaser.classList.add("active"); }
+    else { previewLaser.classList.remove("active"); scanLaser.classList.remove("active"); }
+  }
+  /* camera */
+  function stopCamera(){ if(videoStream){ videoStream.getTracks().forEach(tr=>tr.stop()); videoStream=null; } }
+  async function initCamera(){
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ showAlert(t("alertCamError"), "warn"); return; }
+    try{
+      stopCamera();
+      const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode: facingMode, width:{ideal:1280}, height:{ideal:1280} }, audio:false });
+      videoStream = stream; cameraVideo.srcObject = stream;
+      await new Promise(res=>{ cameraVideo.onloadedmetadata = res; });
+      await cameraVideo.play();
+      camEmpty.style.display="none"; previewWrap.style.display="none"; camActive.style.display="block";
+      captureBtn.disabled=false; setStep(1);
+    }catch(err){ console.warn("Camera error:", err); showAlert(t("alertCamError"), "warn"); }
+  }
+  window.addEventListener("load", initCamera);
+  $("switchCamBtn").addEventListener("click", ()=>{ facingMode = facingMode==="environment" ? "user" : "environment"; initCamera(); });
+  $("retakeBtn").addEventListener("click", ()=>{ previewWrap.style.display="none"; resultsCard.classList.remove("visible"); if(videoStream){ camActive.style.display="block"; } else { initCamera(); } setStep(1); });
+  $("removeBtn").addEventListener("click", ()=>{
+    currentImageBase64=null; previewWrap.style.display="none"; resultsCard.classList.remove("visible");
+    if(videoStream){ camActive.style.display="block"; } else { camEmpty.style.display="flex"; camActive.style.display="none"; }
+    setStep(1); showToast(t("photoRemoved"));
+  });
+  /* capture */
+  captureBtn.addEventListener("click", ()=>{
+    if(!videoStream || !cameraVideo.videoWidth) return;
+    const size = Math.min(cameraVideo.videoWidth, cameraVideo.videoHeight);
+    const canvas = document.createElement("canvas"); canvas.width=size; canvas.height=size;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(cameraVideo, (cameraVideo.videoWidth-size)/2, (cameraVideo.videoHeight-size)/2, size, size, 0, 0, size, size);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+    showPreview(dataUrl);
+  });
+  function checkDarkness(dataUrl, cb){
+    const img = new Image();
+    img.onload = ()=>{ try{
+      const c=document.createElement("canvas"); c.width=32; c.height=32; const x=c.getContext("2d"); x.drawImage(img,0,0,32,32);
+      const d=x.getImageData(0,0,32,32).data; let sum=0; for(let i=0;i<d.length;i+=4) sum += (d[i]+d[i+1]+d[i+2])/3;
+      cb(sum/(d.length/4));
+    }catch(e){ cb(999); } };
+    img.onerror = ()=>cb(999); img.src = dataUrl;
+  }
+  function showPreview(dataUrl){
+    currentImageBase64 = dataUrl.split(",")[1];
+    previewImg.src = dataUrl;
+    camActive.style.display="none"; camEmpty.style.display="none"; previewWrap.style.display="block";
+    hideAlert(); setStep(2);
+    checkDarkness(dataUrl, avg=>{ if(avg<45) showAlert(t("darkPhoto"), "warn"); });
+    analyzeImage();
+  }
+  function processFile(file){
+    if(!file || !file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = (ev)=>{
+      const img = new Image();
+      img.onload = ()=>{
+        let w=img.width, h=img.height;
+        if(w > MAX_DIMENSION){ h = h * MAX_DIMENSION / w; w = MAX_DIMENSION; }
+        const canvas = document.createElement("canvas"); canvas.width=w; canvas.height=h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        showPreview(canvas.toDataURL("image/jpeg", 0.85));
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+  uploadBtn.addEventListener("click", ()=>galleryInput.click());
+  galleryInput.addEventListener("change", (e)=>{ const f=e.target.files[0]; e.target.value=""; if(f) processFile(f); });
+  camEmpty.addEventListener("dragover", e=>{ e.preventDefault(); camEmpty.classList.add("drag"); });
+  camEmpty.addEventListener("dragleave", ()=>camEmpty.classList.remove("drag"));
+  camEmpty.addEventListener("drop", e=>{ e.preventDefault(); camEmpty.classList.remove("drag"); const f=e.dataTransfer.files && e.dataTransfer.files[0]; if(f) processFile(f); });
+  document.addEventListener("paste", e=>{ const item = e.clipboardData && Array.from(e.clipboardData.items||[]).find(i=>i.type.startsWith("image/")); if(item) processFile(item.getAsFile()); });
+
+  /* history - local only, small thumbnails */
+  function getHistory(){ try{ return JSON.parse(localStorage.getItem(HIST_KEY)||"[]"); }catch(e){ return []; } }
+  function thumbOf(dataUrl){
+    return new Promise(res=>{
+      const img=new Image(); img.onload=()=>{ const c=document.createElement("canvas"); const s=Math.min(img.width,img.height); c.width=160; c.height=160; c.getContext("2d").drawImage(img,(img.width-s)/2,(img.height-s)/2,s,s,0,0,160,160); res(c.toDataURL("image/jpeg",0.7)); }; img.onerror=()=>res(""); img.src=dataUrl;
+    });
+  }
+  let histFilter = "all", compareIds = [];
+  window.setHistFilter = function(f, btn){ histFilter = f; document.querySelectorAll('[data-filter]').forEach(b=>b.classList.toggle('on', b===btn)); renderHistory(); };
+  window.renderHistory = function(){
+    const list = $("historyList"), all = getHistory(); list.innerHTML = "";
+    const q = ($("histSearch") ? $("histSearch").value : "").toLowerCase();
+    const sort = $("histSort") ? $("histSort").value : "new";
+    let items = all.map((it, idx)=>({it, idx})).filter(({it})=>{
+      if(q && !((it.plant||"").toLowerCase().includes(q) || (it.disease||"").toLowerCase().includes(q))) return false;
+      const st = (it.data && it.data.health_status || "").toLowerCase();
+      if(histFilter==="healthy" && !st.includes("healthy")) return false;
+      if(histFilter==="diseased" && !st.includes("diseas")) return false;
+      if(histFilter==="star" && !it.star) return false;
+      return true;
+    });
+    if(sort==="old") items.reverse();
+    if(sort==="plant") items.sort((a,b)=>(a.it.plant||"").localeCompare(b.it.plant||""));
+    if(!items.length){ const p=document.createElement("p"); p.style.cssText="font-size:.85rem;color:var(--muted);margin-bottom:10px;"; p.textContent = t("emptyHistory"); list.appendChild(p); }
+    items.slice(0,20).forEach(({it, idx})=>{
+      const row=document.createElement("div"); row.className="hist-item";
+      const im=document.createElement("img"); im.src=it.thumb||""; im.alt="";
+      const tx=document.createElement("div"); const b=document.createElement("b"); b.textContent=it.plant||"—"; const sm=document.createElement("small"); sm.textContent=(it.disease||"")+" · "+(it.date||"");
+      tx.appendChild(b); tx.appendChild(sm);
+      if(it.note){ const nt=document.createElement("div"); nt.style.cssText="font-size:.8rem;color:var(--muted);"; nt.textContent="📝 "+it.note; tx.appendChild(nt); }
+      const star=document.createElement("button"); star.className="hist-del"; star.textContent=it.star?"★":"☆";
+      star.onclick=(e)=>{ e.stopPropagation(); const hh=getHistory(); hh[idx].star=!hh[idx].star; try{ localStorage.setItem(HIST_KEY, JSON.stringify(hh)); }catch(err){} renderHistory(); };
+      const cmp=document.createElement("button"); cmp.className="mini-btn"; cmp.textContent="⇄";
+      cmp.onclick=(e)=>{ e.stopPropagation(); const id=it.date+"|"+(it.plant||""); if(compareIds.includes(id)) compareIds=compareIds.filter(x=>x!==id); else { compareIds.push(id); if(compareIds.length>2) compareIds.shift(); } renderCompare(); renderHistory(); };
+      const del=document.createElement("button"); del.className="hist-del"; del.textContent="×"; del.setAttribute("aria-label","Delete");
+      del.onclick=(e)=>{ e.stopPropagation(); const hh=getHistory(); hh.splice(idx,1); try{ localStorage.setItem(HIST_KEY, JSON.stringify(hh)); }catch(err){} renderHistory(); };
+      row.appendChild(im); row.appendChild(tx); row.appendChild(cmp); row.appendChild(star); row.appendChild(del);
+      row.onclick=()=>renderResults(it.data, it.date, false);
+      list.appendChild(row);
+    });
+    renderCompare();
+  };
+  window.clearHistory = function(){ try{ localStorage.removeItem(HIST_KEY); }catch(e){} renderHistory(); showToast(t("historyCleared")); };
+  renderHistory();
+
+  /* results */
+  function formatText(txt){
+    if(!txt) return "—";
+    const lines = String(txt).split(/\n|•\s|(?=\d+\.\s)/).map(s=>s.trim().replace(/^[-*]\s+/,"")).filter(Boolean);
+    if(lines.length>1) return "<ul>" + lines.map(l=>"<li>"+l.replace(/</g,"&lt;")+"</li>").join("") + "</ul>";
+    return String(txt).replace(/</g,"&lt;");
+  }
+  function renderResults(data, dateStr, save){
+    resPlantName.textContent = data.plant_name || "Unknown Plant";
+    const status = (data.health_status || "Unknown").toLowerCase();
+    resStatusBadge.className = "badge " + (status.includes("healthy") ? "healthy" : status.includes("diseas") ? "diseased" : "unknown");
+    if(status.includes("healthy")) resStatusBadge.textContent = currentLang==='hi' ? "स्वस्थ" : currentLang==='ta' ? "ஆரோக்கியமானது" : "Healthy";
+    else if(status.includes("diseas")) resStatusBadge.textContent = currentLang==='hi' ? "रोगग्रस्त" : currentLang==='ta' ? "நோய்வாய்ப்பட்டது" : "Diseased";
+    else resStatusBadge.textContent = data.health_status || "—";
+    resDisease.innerHTML = formatText(data.disease_name || "None detected");
+    resSymptoms.innerHTML = formatText(data.symptoms || "No symptoms described.");
+    resOrganic.innerHTML = formatText(data.organic_cure || "No organic treatment suggested.");
+    resChemical.innerHTML = formatText(data.chemical_cure || "No chemical treatment suggested.");
+    const when = dateStr || new Date().toLocaleString(currentLang==='hi'?'hi-IN':currentLang==='ta'?'ta-IN':'en-IN', { dateStyle:'medium', timeStyle:'short' });
+    $("resTime").textContent = when;
+    lastResult = data;
+    resultsCard.classList.add("visible"); setStep(3); const sc=$("successCheck"); if(sc){ sc.classList.remove("hidden"); } playResultFeedback();
+    resultsCard.scrollIntoView({ behavior:"smooth", block:"start" });
+    if(save && previewImg.src){
+      thumbOf(previewImg.src).then(thumb=>{
+        const h=getHistory();
+        h.unshift({ plant:data.plant_name||"", disease:data.disease_name||"", date:when, thumb:thumb, data:data });
+        try{ localStorage.setItem(HIST_KEY, JSON.stringify(h.slice(0,20))); }catch(e){}
+        renderHistory();
+      });
+    }
+  }
+  function extractJson(text){
+    let cleaned = text.trim();
+    const match = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if(match) cleaned = match[1].trim();
+    const first = cleaned.indexOf("{"), last = cleaned.lastIndexOf("}");
+    if(first!==-1 && last!==-1) cleaned = cleaned.slice(first, last+1);
+    try{ return JSON.parse(cleaned); }catch(e){ return null; }
+  }
+  async function analyzeImage(){
+    if(isAnalyzing) return;
+    hideAlert();
+    const apiKey = getApiKey();
+    if(!apiKey){ showAlert(t("alertNoKey"), "warn"); keyBody.classList.remove("collapsed"); apiKeyInput.focus(); return; }
+    if(!currentImageBase64){ showAlert(t("alertNoImage"), "warn"); return; }
+    if(navigator.onLine===false){ showAlert(t("offlineWarn"), "warn"); return; }
+    isAnalyzing = true; captureBtn.disabled = true; resultsCard.classList.remove("visible");
+    setStatus(t("statusAnalyzing")); startStatusCycle(); showLoadingState(true); setStep(2);
+    const targetLang = t("aiPromptLang");
+    const prompt = `You are a plant pathologist. Analyze this leaf. Return ONLY a valid JSON object with keys: plant_name, health_status, disease_name, symptoms, organic_cure, chemical_cure. The values inside the JSON MUST be written in the ${targetLang} language. No markdown, no extra text. Do not invent a dose or a number you are not sure about; if unsure, say so in the field.`;
+    try{
+      const res = await fetch(API_URL + encodeURIComponent(apiKey), { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ contents:[{ parts:[{ text:prompt }, { inlineData:{ mimeType:"image/jpeg", data:currentImageBase64 } }] }] }) });
+      if(!res.ok){
+        const errJson = await res.json().catch(()=>({}));
+        const msg = errJson.error?.message || "";
+        if(res.status===400 || res.status===401 || /API key/i.test(msg)) throw new Error(t("errInvalidKey"));
+        if(res.status===429) throw new Error(t("errQuota"));
+        throw new Error(msg || t("errNetwork"));
+      }
+      const json = await res.json();
+      const text = json.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const parsed = extractJson(text);
+      if(!parsed) throw new Error("Could not parse the AI response.");
+      renderResults(parsed, null, true);
+    }catch(err){
+      const msg = /Failed to fetch|NetworkError/i.test(err.message||"") ? t("errNetwork") : err.message;
+      showAlert(msg, "error");
+    }finally{
+      stopStatusCycle(); setStatus(""); showLoadingState(false); isAnalyzing=false; captureBtn.disabled=false;
+    }
+  }
+  /* speak / copy / share */
+  window.speakResult = function(){
+    if(!lastResult) return;
+    try{ speechSynthesis.cancel(); }catch(e){}
+    const langMap = { en:"en-IN", hi:"hi-IN", ta:"ta-IN" };
+    const text = (lastResult.plant_name||"") + ". " + (lastResult.disease_name||"") + ". " + (lastResult.symptoms||"") + ". " + (lastResult.organic_cure||"");
+    const u = new SpeechSynthesisUtterance(text); u.lang = langMap[currentLang]||"en-IN"; u.rate = 0.95;
+    try{ speechSynthesis.speak(u); }catch(e){ showAlert("Voice not supported on this browser.", "warn"); }
+  };
+  function treatmentText(){
+    if(!lastResult) return "";
+    return (lastResult.plant_name||"") + "\n" + (lastResult.disease_name||"") + "\n\nOrganic: " + (lastResult.organic_cure||"") + "\nChemical: " + (lastResult.chemical_cure||"");
+  }
+  window.copyTreatment = async function(){
+    const txt = treatmentText(); if(!txt) return;
+    try{ await navigator.clipboard.writeText(txt); showToast(t("copied")); }
+    catch(e){ const ta=document.createElement("textarea"); ta.value=txt; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); showToast(t("copied")); }
+  };
+  window.shareResult = async function(){
+    const txt = treatmentText(); if(!txt) return;
+    if(navigator.share){ try{ await navigator.share({ title:"AI Plant Doctor", text:txt }); return; }catch(e){ if(e && e.name==="AbortError") return; } }
+    try{ await navigator.clipboard.writeText(txt); }catch(e){}
+    window.open("https://wa.me/?text=" + encodeURIComponent(txt), "_blank");
+    showToast(t("shared"));
+  };
+
+  /* settings */
+  function getSettings(){ try{ return JSON.parse(localStorage.getItem("plant_settings_v1")||"{}"); }catch(e){ return {}; } }
+  function applySettings(){
+    const s=getSettings(); document.body.classList.toggle("high-contrast", !!s.contrast);
+    const onoff = (v)=> v ? "On" : "Off";
+    // labels are updated by language change; keep button text simple with current language where possible
+    if($("contrastBtn")) $("contrastBtn").textContent = (currentLang==="hi" ? "अधिक कंट्रास्ट: " : currentLang==="ta" ? "அதிக மாறுபாடு: " : "High contrast: ") + (s.contrast ? (currentLang==="hi" ? "चालू" : currentLang==="ta" ? "இயக்கு" : "On") : (currentLang==="hi" ? "बंद" : currentLang==="ta" ? "அணை" : "Off"));
+    if($("soundBtn")) $("soundBtn").textContent = (currentLang==="hi" ? "परिणाम की ध्वनि: " : currentLang==="ta" ? "முடிவு ஒலி: " : "Result sound: ") + (s.sound ? (currentLang==="hi" ? "चालू" : currentLang==="ta" ? "இயக்கு" : "On") : (currentLang==="hi" ? "बंद" : currentLang==="ta" ? "அணை" : "Off"));
+    if($("vibrateBtn")) $("vibrateBtn").textContent = (currentLang==="hi" ? "कंपन: " : currentLang==="ta" ? "அதிர்வு: " : "Vibration: ") + (s.vibrate ? (currentLang==="hi" ? "चालू" : currentLang==="ta" ? "இயக்கு" : "On") : (currentLang==="hi" ? "बंद" : currentLang==="ta" ? "அணை" : "Off"));
+  }
+  window.toggleSetting = function(k){ const s=getSettings(); s[k]=!s[k]; try{ localStorage.setItem("plant_settings_v1", JSON.stringify(s)); }catch(e){} applySettings(); };
+  function playResultFeedback(){
+    const s=getSettings();
+    if(s.sound){ try{ const ctx=new (window.AudioContext||window.webkitAudioContext)(); const o=ctx.createOscillator(), g=ctx.createGain(); o.connect(g); g.connect(ctx.destination); o.frequency.value=660; g.gain.setValueAtTime(0.08, ctx.currentTime); o.start(); o.stop(ctx.currentTime+0.25); }catch(e){} }
+    if(s.vibrate && navigator.vibrate){ try{ navigator.vibrate(200); }catch(e){} }
+  }
+  /* daily tip + glossary */
+  window.renderDailyTip = function(){ const tips=TIPS[currentLang]||TIPS.en; const day=Math.floor(new Date().getTime()/86400000); if($("dailyTipText")) $("dailyTipText").textContent = "🌿 " + tips[day % tips.length]; };
+  window.renderGloss = function(){ const box=$("glossBox"); if(!box) return; box.innerHTML=""; (GLOSS[currentLang]||GLOSS.en).forEach(([term, meaning])=>{ const d=document.createElement("details"); d.className="acc"; const s=document.createElement("summary"); s.textContent=term; const pp=document.createElement("p"); pp.textContent=meaning; d.appendChild(s); d.appendChild(pp); box.appendChild(d); }); };
+  /* water log */
+  function getWater(){ try{ return JSON.parse(localStorage.getItem("plant_water_v1")||"[]"); }catch(e){ return []; } }
+  window.renderWater = function(){ const w=getWater(); const el=$("waterInfo"); if(!el) return; const last=w[w.length-1]||""; el.textContent = w.length ? ((currentLang==="hi" ? "कुल: " : currentLang==="ta" ? "மொத்தம்: " : "Total: ") + w.length + (currentLang==="hi" ? " बार · अंतिम: " : currentLang==="ta" ? " முறை · கடைசி: " : " times · Last: ") + last) : ""; };
+  window.logWater = function(){ const today=new Date().toISOString().slice(0,10); const w=getWater(); if(w.includes(today)){ showToast(t("waterDone")); return; } w.push(today); try{ localStorage.setItem("plant_water_v1", JSON.stringify(w)); }catch(e){} renderWater(); showToast("💧"); };
+  /* diary */
+  function getDiary(){ try{ return JSON.parse(localStorage.getItem("plant_diary_v1")||"[]"); }catch(e){ return []; } }
+  window.renderDiary = function(){ const list=$("diaryList"); if(!list) return; const items=getDiary(); list.innerHTML=""; if(!items.length){ list.innerHTML="<p style='font-size:.85rem;color:var(--muted);'>"+t("diaryEmpty")+"</p>"; return; } items.slice().reverse().forEach((it, ri)=>{ const idx=items.length-1-ri; const d=document.createElement("div"); d.className="hist-item"; d.style.cursor="default"; const tx=document.createElement("div"); const b=document.createElement("b"); b.textContent=it.plant; const sm=document.createElement("small"); sm.textContent=(it.date||"")+" — "+(it.note||""); tx.appendChild(b); tx.appendChild(sm); const del=document.createElement("button"); del.className="hist-del"; del.textContent="×"; del.onclick=()=>{ const dd=getDiary(); dd.splice(idx,1); try{ localStorage.setItem("plant_diary_v1", JSON.stringify(dd)); }catch(e){} renderDiary(); }; d.appendChild(tx); d.appendChild(del); list.appendChild(d); }); };
+  window.addDiary = function(){ const plant=$("diaryPlant").value.trim(); const note=$("diaryNote").value.trim(); if(!plant){ showAlert(t("needPlant"), "warn"); return; } const items=getDiary(); items.push({plant, note, date:new Date().toISOString().slice(0,10)}); try{ localStorage.setItem("plant_diary_v1", JSON.stringify(items)); }catch(e){} $("diaryPlant").value=""; $("diaryNote").value=""; renderDiary(); showToast(t("diarySaved")); };
+  /* reminders */
+  function getReminders(){ try{ return JSON.parse(localStorage.getItem("plant_remind_v1")||"[]"); }catch(e){ return []; } }
+  window.renderReminders = function(){ const list=$("remindList"); if(!list) return; const items=getReminders(); list.innerHTML=""; if(!items.length){ list.innerHTML="<p style='font-size:.85rem;color:var(--muted);'>"+t("remindEmpty")+"</p>"; return; } const today=new Date().toISOString().slice(0,10); items.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach((it)=>{ const origIdx=items.indexOf(it); const d=document.createElement("div"); d.className="hist-item"; d.style.cursor="default"; const tx=document.createElement("div"); const b=document.createElement("b"); b.textContent=it.note||""; const sm=document.createElement("small"); sm.textContent=it.date; if(!it.done && it.date<=today){ const badge=document.createElement("span"); badge.className="due-badge"; badge.textContent=t("remindDue"); sm.appendChild(document.createTextNode(" ")); sm.appendChild(badge); } if(it.done){ b.style.textDecoration="line-through"; } tx.appendChild(b); tx.appendChild(sm); const done=document.createElement("button"); done.className="mini-btn"; done.textContent="✓"; done.onclick=()=>{ const rr=getReminders(); rr[origIdx].done=!rr[origIdx].done; try{ localStorage.setItem("plant_remind_v1", JSON.stringify(rr)); }catch(e){} renderReminders(); }; const del=document.createElement("button"); del.className="hist-del"; del.textContent="×"; del.onclick=()=>{ const rr=getReminders(); rr.splice(origIdx,1); try{ localStorage.setItem("plant_remind_v1", JSON.stringify(rr)); }catch(e){} renderReminders(); }; d.appendChild(tx); d.appendChild(done); d.appendChild(del); list.appendChild(d); }); };
+  window.addReminder = function(){ const date=$("remindDate").value; const note=$("remindNote").value.trim(); if(!date){ showAlert(t("needDate"), "warn"); return; } if(!note){ showAlert(t("needPlant"), "warn"); return; } const items=getReminders(); items.push({date, note, done:false}); try{ localStorage.setItem("plant_remind_v1", JSON.stringify(items)); }catch(e){} $("remindNote").value=""; renderReminders(); showToast(t("remindSaved")); };
+  /* compare */
+  window.renderCompare = function(){
+    const box=$("compareBox"); if(!box) return;
+    if(compareIds.length<2){ box.classList.add("hidden"); return; }
+    const all=getHistory(); const chosen=compareIds.map(id=>all.find(it=> (it.date+"|"+(it.plant||""))===id)).filter(Boolean);
+    if(chosen.length<2){ box.classList.add("hidden"); return; }
+    box.classList.remove("hidden");
+    const field=(a,b)=>"<div style='display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;'><div><b>"+(a||"—")+"</b></div><div><b>"+(b||"—")+"</b></div></div>";
+    box.innerHTML="<h3 style='font-size:1rem;margin-bottom:8px;'>"+t("compareTitle")+"</h3>"+field(chosen[0].plant, chosen[1].plant)+"<div style='font-size:.8rem;color:var(--muted);'>"+(chosen[0].data&&chosen[0].data.disease_name||"")+" | "+(chosen[1].data&&chosen[1].data.disease_name||"")+"</div><div style='font-size:.85rem;margin-top:6px;'>"+(chosen[0].data&&chosen[0].data.symptoms||"")+"</div><div style='font-size:.85rem;margin-top:4px;'>"+(chosen[1].data&&chosen[1].data.symptoms||"")+"</div>";
+  };
+  window.clearCompare = function(){ compareIds=[]; renderCompare(); renderHistory(); };
+  /* notes / export / copy all */
+  window.saveResultNote = function(){ const note=$("resultNote").value.trim(); if(!note) return; const hh=getHistory(); if(hh.length){ hh[0].note=note; try{ localStorage.setItem(HIST_KEY, JSON.stringify(hh)); }catch(e){} renderHistory(); } showToast(t("noteSaved")); };
+  function downloadFile(name, content, type){ const blob=new Blob([content], {type:type||"text/plain;charset=utf-8"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000); }
+  window.exportTxt = function(){ if(!lastResult) return; const txt=(lastResult.plant_name||"")+"\n"+(lastResult.disease_name||"")+"\n\nSymptoms: "+(lastResult.symptoms||"")+"\n\nOrganic: "+(lastResult.organic_cure||"")+"\nChemical: "+(lastResult.chemical_cure||""); downloadFile("plant-doctor-report.txt", txt); };
+  window.exportCsv = function(){ const rows=[["Plant","Disease","Date"]]; getHistory().forEach(it=>rows.push([(it.plant||"").replace(/"/g,'""'), (it.disease||"").replace(/"/g,'""'), it.date||""])); const csv=rows.map(r=>r.map(c=>'"'+c+'"').join(",")).join("\n"); downloadFile("plant-history.csv", csv, "text/csv;charset=utf-8"); showToast(t("csvSaved")); };
+  window.copyAllResult = async function(){ if(!lastResult) return; const txt=(lastResult.plant_name||"")+"\n"+(lastResult.disease_name||"")+"\n"+(lastResult.symptoms||"")+"\nOrganic: "+(lastResult.organic_cure||"")+"\nChemical: "+(lastResult.chemical_cure||""); try{ await navigator.clipboard.writeText(txt); showToast(t("copied")); }catch(e){} };
+  /* quiz */
+  let quizIdx=0, quizScore=0, quizAnswered=false;
+  window.renderQuiz = function(){
+    const box=$("quizBox"); if(!box) return;
+    if(quizIdx<0){ box.innerHTML="<button class='btn btn-primary' onclick='startQuiz()'>"+t("quizStart")+"</button>"; return; }
+    const qs=QUIZ[currentLang]||QUIZ.en;
+    if(quizIdx>=qs.length){ box.innerHTML="<p style='font-weight:800;font-size:1.1rem;'>"+quizScore+" / "+qs.length+"</p><button class='btn btn-secondary' onclick='startQuiz()'>"+t("quizRetry")+"</button>"; return; }
+    const q=qs[quizIdx];
+    let html="<p style='font-weight:700;margin-bottom:10px;'>"+(quizIdx+1)+". "+q.q+"</p>";
+    q.o.forEach((opt,i)=>{ html+="<button class='quiz-opt' onclick='answerQuiz("+i+",this)'>"+opt+"</button>"; });
+    html+="<div id='quizFeedback' style='margin-top:8px;font-weight:700;'></div><button class='btn btn-secondary hidden' id='quizNextBtn' onclick='nextQuiz()'>"+(quizIdx===qs.length-1 ? t("quizFinish") : t("quizNext"))+"</button>";
+    box.innerHTML=html; quizAnswered=false;
+  };
+  window.startQuiz = function(){ quizIdx=0; quizScore=0; renderQuiz(); };
+  window.answerQuiz = function(i, btn){
+    if(quizAnswered) return; quizAnswered=true;
+    const qs=QUIZ[currentLang]||QUIZ.en; const q=qs[quizIdx];
+    const opts=document.querySelectorAll(".quiz-opt");
+    opts.forEach((o,idx)=>{ if(idx===q.a) o.classList.add("correct"); if(idx===i && i!==q.a) o.classList.add("wrong"); o.disabled=true; });
+    if(i===q.a){ quizScore++; $("quizFeedback").textContent=t("quizCorrect"); } else { $("quizFeedback").textContent=t("quizWrong"); btn.classList.add("shake"); }
+    $("quizNextBtn").classList.remove("hidden");
+  };
+  window.nextQuiz = function(){ quizIdx++; renderQuiz(); };
+  /* lightbox + ripple + history search */
+  if(previewImg){ previewImg.style.cursor="zoom-in"; previewImg.addEventListener("click", ()=>{ if(previewImg.src){ $("lightboxImg").src=previewImg.src; $("lightbox").classList.add("open"); } }); }
+  document.addEventListener("click", (e)=>{
+    const btn=e.target.closest(".btn, .mini-btn, .filter-btn"); if(!btn) return;
+    if(getComputedStyle(btn).position==="static") btn.style.position="relative";
+    const r=document.createElement("span"); r.className="ripple"; const rect=btn.getBoundingClientRect(); const sz=Math.max(rect.width, rect.height); r.style.width=r.style.height=sz+"px"; r.style.left=(e.clientX-rect.left-sz/2)+"px"; r.style.top=(e.clientY-rect.top-sz/2)+"px"; btn.appendChild(r); setTimeout(()=>r.remove(), 600);
+  });
+  if($("histSearch")) $("histSearch").addEventListener("input", renderHistory);
+  /* wrap language change to refresh new sections and placeholders */
+  const origChange = window.changeLanguage;
+  window.changeLanguage = function(lang, btn){
+    origChange(lang, btn);
+    document.querySelectorAll('[data-i18n-ph]').forEach(el=>{ const k=el.getAttribute('data-i18n-ph'); if(translations[lang] && translations[lang][k]) el.placeholder=translations[lang][k]; });
+    applySettings(); renderDailyTip(); renderGloss(); renderWater(); renderDiary(); renderReminders(); renderQuiz(); renderHistory(); renderPrevent();
+  };
+  applySettings(); renderDailyTip(); renderGloss(); renderWater(); renderDiary(); renderReminders(); quizIdx=-1; renderQuiz();
+
+})();
+</script>
+</body>
+</html>
